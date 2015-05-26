@@ -472,8 +472,28 @@ void QtMainWindow::navigate(QString url, int index)
 			QString errStr = test.errorString();
 			if (errStr.length() > 0 )
 				LOG(ERROR) + "WebView navigate: failed to parse URL: " + errStr.toStdString();
+#ifdef	EXTENDEDTRACE
+			LOG(INFO) + "[Extended trace] naviage : signals intiated";
+			QUrl currenturl= QUrl(url);
+            wv->load(currenturl);
+			m_request = QNetworkRequest (currenturl);
+			m_reply = wv->page()->networkAccessManager()->get(m_request);
 
-            wv->load(QUrl(url));
+			connect(wv->page()->networkAccessManager(), SIGNAL(finished(QNetworkReply *)),
+				this, SLOT(replyFinish(QNetworkReply *)),Qt::UniqueConnection);
+
+			
+			connect(m_reply, SIGNAL(error(QNetworkReply::NetworkError)),
+				this,  SLOT(PrintError(QNetworkReply::NetworkError)));
+			
+
+			 connect(wv->page(), SIGNAL(unsupportedContent(QNetworkReply*)),
+            this, SLOT(PageunsupportedContent(QNetworkReply*)));
+			
+			
+#else
+			wv->load(QUrl(url));
+#endif
         }
     }
 }
@@ -1189,3 +1209,26 @@ void QtMainWindow::setTitle(const char* title)
 {
     this->setWindowTitle(QString::fromUtf8(title));
 }
+
+#ifdef	EXTENDEDTRACE
+	void QtMainWindow::replyFinish(QNetworkReply *reply)
+	{
+		QString tempstring = reply->url().toString();
+		LOG(INFO) + "[Extended Trace] replyFinish : " + tempstring.toStdString().c_str();
+	}
+
+
+	void QtMainWindow::PrintError(QNetworkReply::NetworkError code)
+	{
+		CHAR szTest[100];
+		sprintf(szTest,("%d"),code);
+		LOG(INFO) + "[Extended Trace] PrintError Code :" +  szTest;
+	}
+
+	void QtMainWindow::PageunsupportedContent(QNetworkReply *ureply)
+	{
+		QString tempstring = ureply->url().toString();
+		QString errorString = ureply->errorString();
+		LOG(INFO) + "[Extended Trace] PageunsupportedContent : " +  errorString.toStdString().c_str() + "----" + tempstring.toStdString().c_str();
+	}
+#endif
