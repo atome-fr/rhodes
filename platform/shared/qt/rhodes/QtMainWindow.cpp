@@ -1220,9 +1220,8 @@ void QtMainWindow::setTitle(const char* title)
 
 	void QtMainWindow::PrintError(QNetworkReply::NetworkError code)
 	{
-		CHAR szTest[100];
-		sprintf(szTest,("%d"),code);
-		LOG(INFO) + "[Extended Trace] PrintError Code :" +  szTest;
+		QString PrintErrorString = QString::number(code);
+		LOG(INFO) + "[Extended Trace] PrintError Code :" +   PrintErrorString.toStdString().c_str();
 	}
 
 	void QtMainWindow::PageunsupportedContent(QNetworkReply *ureply)
