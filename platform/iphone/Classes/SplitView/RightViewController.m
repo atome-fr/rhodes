@@ -262,7 +262,7 @@ void rho_webview_refresh(int index);
 }
 
 
-- (UIWebView*)detachWebView {
+- (UIView*)detachWebView {
 	SimpleMainView* v = [self getSimpleView:-1];
 	return [v detachWebView];
 }
@@ -376,7 +376,7 @@ void rho_webview_refresh(int index);
 	[v removeNavBar];
 }
 
-- (UIWebView*)getWebView:(int)tab_index {
+- (UIView*)getWebView:(int)tab_index {
 	SimpleMainView* v = [self getSimpleView:index];
 	return [v getWebView:tab_index];
 }

@@ -48,7 +48,7 @@
 
 //- (UIView*)view;
 
-- (UIWebView*)detachWebView;
+- (UIView*)detachWebView;
 
 - (void)loadHTMLString:(NSString*)data;
 
@@ -68,7 +68,7 @@
 - (void)addNavBar:(NSString*)title left:(NSArray*)left right:(NSArray*)right;
 - (void)removeNavBar;
 
-- (UIWebView*)getWebView:(int)tab_index;
+- (UIView*)getWebView:(int)tab_index;
 
 -(void)callCallback:(int)new_index;
 

@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7C56F1291B2B1083000C5C74 /* UIWebViewMerged.h in Headers */ = {isa = PBXBuildFile; fileRef = 7C56F1241B2B1083000C5C74 /* UIWebViewMerged.h */; };
+		7C56F12A1B2B1083000C5C74 /* UIWebViewMerged.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C56F1251B2B1083000C5C74 /* UIWebViewMerged.m */; };
+		7C56F12B1B2B1083000C5C74 /* WebViewMerger.h in Headers */ = {isa = PBXBuildFile; fileRef = 7C56F1261B2B1083000C5C74 /* WebViewMerger.h */; };
+		7C56F12C1B2B1083000C5C74 /* WKWebViewMerged.h in Headers */ = {isa = PBXBuildFile; fileRef = 7C56F1271B2B1083000C5C74 /* WKWebViewMerged.h */; };
+		7C56F12D1B2B1083000C5C74 /* WKWebViewMerged.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C56F1281B2B1083000C5C74 /* WKWebViewMerged.m */; };
 		C5DFBB31185B6FB400DB6BDB /* IAppMessageReceiver.h in Headers */ = {isa = PBXBuildFile; fileRef = C5DFBB30185B6FB400DB6BDB /* IAppMessageReceiver.h */; };
 		FA11F249192121BF00FB1301 /* IRhoExtension.h in Headers */ = {isa = PBXBuildFile; fileRef = FA11F248192121BF00FB1301 /* IRhoExtension.h */; };
 		FA11F24B192121F200FB1301 /* IRhoExtManager.h in Headers */ = {isa = PBXBuildFile; fileRef = FA11F24A192121F200FB1301 /* IRhoExtManager.h */; };
@@ -119,6 +124,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7C56F1241B2B1083000C5C74 /* UIWebViewMerged.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UIWebViewMerged.h; sourceTree = "<group>"; };
+		7C56F1251B2B1083000C5C74 /* UIWebViewMerged.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIWebViewMerged.m; sourceTree = "<group>"; };
+		7C56F1261B2B1083000C5C74 /* WebViewMerger.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WebViewMerger.h; sourceTree = "<group>"; };
+		7C56F1271B2B1083000C5C74 /* WKWebViewMerged.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WKWebViewMerged.h; sourceTree = "<group>"; };
+		7C56F1281B2B1083000C5C74 /* WKWebViewMerged.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = WKWebViewMerged.m; sourceTree = "<group>"; };
 		C5DFBB30185B6FB400DB6BDB /* IAppMessageReceiver.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = IAppMessageReceiver.h; sourceTree = "<group>"; };
 		D2AAC046055464E500DB518D /* librhoappbaselib.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = librhoappbaselib.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA11F248192121BF00FB1301 /* IRhoExtension.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = IRhoExtension.h; path = RhoExtManager/IRhoExtension.h; sourceTree = "<group>"; };
@@ -566,6 +576,11 @@
 		FA20C28D182B04140036D304 /* WebView */ = {
 			isa = PBXGroup;
 			children = (
+				7C56F1241B2B1083000C5C74 /* UIWebViewMerged.h */,
+				7C56F1251B2B1083000C5C74 /* UIWebViewMerged.m */,
+				7C56F1261B2B1083000C5C74 /* WebViewMerger.h */,
+				7C56F1271B2B1083000C5C74 /* WKWebViewMerged.h */,
+				7C56F1281B2B1083000C5C74 /* WKWebViewMerged.m */,
 				FA20C28C182B04140036D304 /* WebView.m */,
 			);
 			name = WebView;
@@ -637,6 +652,7 @@
 				FA20C2CA182B07BA0036D304 /* Event.h in Headers */,
 				FA11F2521921224400FB1301 /* RhoExtManagerSingletone.h in Headers */,
 				FA20C307182B08080036D304 /* NetworkStatusMonitor.h in Headers */,
+				7C56F1291B2B1083000C5C74 /* UIWebViewMerged.h in Headers */,
 				FA20C2ED182B07DA0036D304 /* NVViewController.h in Headers */,
 				FA20C2EF182B07DA0036D304 /* NVDelegate.h in Headers */,
 				FA20C2F7182B07EB0036D304 /* RhoCryptImpl.h in Headers */,
@@ -658,6 +674,7 @@
 				FA20C2C1182B07AE0036D304 /* Bluetooth.h in Headers */,
 				FAA5A5AE182B0E9B00590B1F /* rhorunner_Prefix.pch in Headers */,
 				FA20C2CC182B07BE0036D304 /* LocationController.h in Headers */,
+				7C56F12B1B2B1083000C5C74 /* WebViewMerger.h in Headers */,
 				FA89817A18917EAF00AF5E39 /* SignatureDelegate.h in Headers */,
 				FA20C2D1182B07C50036D304 /* LogViewController.h in Headers */,
 				FA20C2F3182B07DE0036D304 /* NavBar.h in Headers */,
@@ -678,6 +695,7 @@
 				FA20C2B8182B07A10036D304 /* CRhoURLProtocol.h in Headers */,
 				FA20C2D2182B07C50036D304 /* LogOptionsController.h in Headers */,
 				FA20C2CF182B07C50036D304 /* InitMemoryInfoCollector.h in Headers */,
+				7C56F12C1B2B1083000C5C74 /* WKWebViewMerged.h in Headers */,
 				FA20C302182B07F20036D304 /* RingtoneManager.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -777,6 +795,7 @@
 				FA20C2D3182B07C50036D304 /* LogOptionsController.m in Sources */,
 				FA20C2FA182B07EB0036D304 /* RhoClassFactory.cpp in Sources */,
 				FA20C30E182B08080036D304 /* Rhodes.m in Sources */,
+				7C56F12D1B2B1083000C5C74 /* WKWebViewMerged.m in Sources */,
 				FA20C2C2182B07AE0036D304 /* Bluetooth.m in Sources */,
 				FA20C2C4182B07B60036D304 /* DateTimePickerDelegate.m in Sources */,
 				FA20C2DB182B07CB0036D304 /* SplitViewDelegate.m in Sources */,
@@ -787,6 +806,7 @@
 				FA20C2F9182B07EB0036D304 /* RhoThreadImpl.m in Sources */,
 				FA20C2D9182B07CB0036D304 /* SplittedMainView.m in Sources */,
 				FA20C2E8182B07D10036D304 /* MapViewController.m in Sources */,
+				7C56F12A1B2B1083000C5C74 /* UIWebViewMerged.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

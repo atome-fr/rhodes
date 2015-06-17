@@ -42,6 +42,10 @@
 
 #import "RhoExtManager/RhoExtManagerSingletone.h"
 
+#import "WebViewMerger.h"
+#import "UIWebViewMerged.h"
+#import "WKWebViewMerged.h"
+
 
 #undef DEFAULT_LOGCATEGORY
 #define DEFAULT_LOGCATEGORY "SimpleMainView"
@@ -370,16 +374,29 @@ static BOOL makeHiddenUntilLoadContent = YES;
     [self setContentRect:wFrame];
 }
 
-- (UIWebView*)newWebView:(CGRect)frame {
-    UIWebView *w = [[UIWebView alloc] initWithFrame:frame];
-    w.scalesPageToFit = YES;
+- (UIView*)newWebView:(CGRect)frame {
+
+   const char* conf = get_app_build_config_item("WKWebView");
+   NSString *confStr = [NSString stringWithUTF8String:conf];
+   BOOL useWKWebViewConf = [confStr boolValue];
+
+   UIView<WebViewMerger>* w;
+   if (NSClassFromString(@"WKWebView") && useWKWebViewConf) {
+       w = [[WKWebView alloc] initWithFrame:frame];
+   } else {
+       w = [[UIWebView alloc] initWithFrame:frame];
+       ((UIWebView *)w).scalesPageToFit = YES;
+       ((UIWebView *)w).dataDetectorTypes = UIDataDetectorTypeNone;
+   }
+
+   [w setDelegateViews: self];
+
     if ( !rho_conf_getBool("WebView.enableBounce") )
-        [[w scrollView] setBounces:NO];
+       [[w scrollView] setBounces:NO];
+
     w.userInteractionEnabled = YES;
     w.multipleTouchEnabled = YES;
     w.clipsToBounds = NO;
-    w.dataDetectorTypes = UIDataDetectorTypeNone;
-    w.delegate = self;
     w.autoresizesSubviews = YES;
     //w.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
     w.autoresizingMask = UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth;
@@ -389,7 +406,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
     return w;
 }
 
-- (id)init:(UIView*)p webView:(UIWebView*)w frame:(CGRect)frame bar_info:(NSDictionary*)bar_info web_bkg_color:(UIColor*)web_bkg_color {
+- (id)init:(UIView*)p webView:(UIView*)w frame:(CGRect)frame bar_info:(NSDictionary*)bar_info web_bkg_color:(UIColor*)web_bkg_color {
 	[self init];
 	
 	self.mTabBarCallback = nil;
@@ -608,7 +625,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
     return [self initWithMainView:v parent:p bar_info:nil];
 }
 
-- (id)initWithParentView:(UIView *)p frame:(CGRect)frame webview:(UIWebView*)webview {
+- (id)initWithParentView:(UIView *)p frame:(CGRect)frame webview:(UIView*)webview {
     id result = [self init:p webView:webview frame:frame bar_info:nil web_bkg_color:nil];
     return result;
 }
@@ -618,7 +635,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
     CGRect frame = [[v view] frame];
 	frame.origin.x = 0;
     //UIWebView *w = (UIWebView*)[Rhodes subviewWithTag:RHO_TAG_WEBVIEW ofView:[v view]];
-    UIWebView *w = [v detachWebView];
+    UIView *w = [v detachWebView];
     id result = [self init:p webView:w frame:frame bar_info:bar_info web_bkg_color:nil];
     return result;
 }
@@ -640,7 +657,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
 	}
 	else if (webView) {
         [root addSubview:webView];
-        webView.delegate = self;
+        [webView setDelegateViews: self];
 	}
 	assert(!nativeView || [nativeView retainCount] == 2);
 	assert(!webView || [webView retainCount] == 2);
@@ -661,7 +678,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
 }
 
 - (void)dealloc {
-    webView.delegate = nil;
+    [webView setDelegateViews: nil];
     nativeView = nil;
     nativeViewView = nil;
     self.webView = nil;
@@ -698,11 +715,12 @@ static BOOL makeHiddenUntilLoadContent = YES;
 }
 
 
-- (UIWebView*)detachWebView {
+- (UIView*)detachWebView {
 	[self restoreWebView];
-	UIWebView *w = [webView retain];
+	UIView *w = [webView retain];
 	[w removeFromSuperview];
-    webView.delegate = nil;
+
+    [[self webView] setDelegateViews: nil];
     self.webView = nil;
     
     assert(w && [w retainCount] == 1);
@@ -725,7 +743,8 @@ static BOOL makeHiddenUntilLoadContent = YES;
 	
 	//[self loadHTMLString:datas];
     NSString* jscode = [NSString stringWithFormat:@"document.body.style.backgroundColor = \"#%6X\";", bkg_color];
-    [self.webView stringByEvaluatingJavaScriptFromString:jscode];
+    //[self.webView stringByEvaluatingJavaScriptFromString:jscode];
+    [self.webView evaluateJavaScript:jscode completionHandler:nil];
 
 	//self.webView.hidden = YES;
 }
@@ -973,7 +992,8 @@ static BOOL makeHiddenUntilLoadContent = YES;
 		[self.view.superview bringSubviewToFront:self.view];
     }
     RAWLOG_INFO1("Executing JS: %s", [js UTF8String]);
-    [webView stringByEvaluatingJavaScriptFromString:js];
+
+    [webView evaluateJavaScript:js completionHandler:nil];
 }
 
 - (NSString*)currentLocation:(int)index {
@@ -1004,7 +1024,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
     return 0;
 }
 
-- (UIWebView*)getWebView:(int)tab_index {
+- (UIView*)getWebView:(int)tab_index {
 	return webView;
 }
 
@@ -1097,18 +1117,20 @@ static BOOL makeHiddenUntilLoadContent = YES;
 }
 
 
-// UIWebViewDelegate imlementation
+// Delegates
 
-- (BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request
- navigationType:(UIWebViewNavigationType)navigationType {
+
+// Common method
+- (BOOL) shouldStartDecidePolicy: (NSURLRequest *) request
+{
     NSURL *url = [request URL];
     if (!url)
         return NO;
-    
+
     const char* curl = [[url absoluteString] UTF8String];
     RAWLOG_INFO1("WebView shouldStartLoadWithRequest( %s )", curl);
-    
-    
+
+
     BOOL res = [[RhoExtManagerSingletone getExtensionManager] onBeforeNavigate:[url absoluteString] tabIndex:thisTabIndex];
     if (res) {
         // one from extension block this URL
@@ -1162,15 +1184,42 @@ static BOOL makeHiddenUntilLoadContent = YES;
     return YES;
 }
 
-- (void)webViewDidStartLoad:(UIWebView *)webview {
+
+// Delegate for UIWebView
+- (BOOL) webView: (UIWebView *) webView shouldStartLoadWithRequest: (NSURLRequest *) request navigationType: (UIWebViewNavigationType) navigationType
+{
+    return [self shouldStartDecidePolicy: request];
+}
+
+// Delegate for WKWebView
+- (void) webView: (WKWebView *) webView decidePolicyForNavigationAction: (WKNavigationAction *) navigationAction decisionHandler: (void (^)(WKNavigationActionPolicy)) decisionHandler
+{
+    decisionHandler([self shouldStartDecidePolicy: [navigationAction request]]);
+}
+
+
+
+// Delegate for UIWebView
+- (void) webViewDidStartLoad: (UIWebView *) webView
+{
     // TODO
     //[self active];
     PROF_START("BROWSER_PAGE");
 }
 
-- (void)webViewDidFinishLoad:(UIWebView *)webview {
+// Delegate for WKWebView
+-(void)webView:(WKWebView *) webView didStartProvisionalNavigation: (WKNavigation *) navigation
+{
+    PROF_START("BROWSER_PAGE");
+}
+
+
+// Common method
+- (void) finishLoadOrNavigation
+{
     // Disable default context menu on touch
-    [webview stringByEvaluatingJavaScriptFromString:@"document.documentElement.style.webkitTouchCallout = \"none\";"];
+
+    [webView evaluateJavaScript:@"document.documentElement.style.webkitTouchCallout = \"none\";" completionHandler:nil];
 
     PROF_STOP("BROWSER_PAGE");
     
@@ -1179,7 +1228,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
     NSURLCache *sharedCache = [[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil];
 	[NSURLCache setSharedURLCache:sharedCache];
 	[sharedCache release];
-	
+
 	if (self.view.hidden) {
 		[[Rhodes sharedInstance] hideSplash];
 		self.view.hidden = NO;
@@ -1194,7 +1243,7 @@ static BOOL makeHiddenUntilLoadContent = YES;
 			[self.webView.superview bringSubviewToFront:self.webView];
 		}
 	}
-	
+
 	if (!self.isBackgroundSetted) {
 		self.isBackgroundSetted = YES;
 		if (self.url_after_set_background != nil) {
@@ -1207,8 +1256,8 @@ static BOOL makeHiddenUntilLoadContent = YES;
 		}
 	}
 	self.url_after_set_background = nil;
-    
-    
+
+
     NSString* jscode = [NSString stringWithFormat:@"window['__rhoJsVmID']='%@'", [NSNumber numberWithInt:self.thisTabIndex]];
     //[self executeJs:@"alert('hello')" tab:self.thisTabIndex];
     [self executeJs:jscode tab:self.thisTabIndex];
@@ -1232,21 +1281,34 @@ static BOOL makeHiddenUntilLoadContent = YES;
      }
      
      //NSString* location = [webview stringByEvaluatingJavaScriptFromString:@"location.href"];
-     //rho_rhodesapp_keeplastvisitedurl( [location cStringUsingEncoding:[NSString defaultCStringEncoding]] );									 
-     
+     //rho_rhodesapp_keeplastvisitedurl( [location cStringUsingEncoding:[NSString defaultCStringEncoding]] );
+
      if ([actionTarget respondsToSelector:@selector(hideSplash)])
      [actionTarget performSelectorOnMainThread:@selector(hideSplash) withObject:nil waitUntilDone:NO];
      */
 }
 
-- (void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error {
- 
+// Delegate for UIWebView
+- (void)webViewDidFinishLoad:(UIWebView *)webview {
+    [self finishLoadOrNavigation];
+}
+
+// Delegate for WKWebView
+- (void) webView: (WKWebView *) webView didFinishNavigation: (WKNavigation *) navigation
+{
+    [self finishLoadOrNavigation];
+}
+
+
+// Common method
+- (void) failLoadOrNavigation: (NSError *) error
+{
     PROF_STOP("BROWSER_PAGE");
 
     NSString* info = [error localizedDescription];
     NSString* reason = [error localizedFailureReason];
     RAWLOG_INFO2("WebView FAIL load with error: [%s] , reason: [%s]", [info UTF8String], [reason UTF8String]);
-    
+
 	if (self.view.hidden) {
 		[[Rhodes sharedInstance] hideSplash];
 		self.view.hidden = NO;
@@ -1261,8 +1323,31 @@ static BOOL makeHiddenUntilLoadContent = YES;
     }
 	self.isBackgroundSetted = YES;
 	self.url_after_set_background = nil;
-    
+
 }
+
+
+// Delegate for UIWebView
+- (void) webView: (UIWebView *) webView didFailLoadWithError: (NSError *) error
+{
+    [self failLoadOrNavigation: error];
+}
+
+// Delegate for WKWebView
+- (void) webView:(WKWebView *) webView didFailProvisionalNavigation: (WKNavigation *) navigation withError: (NSError *) error
+{
+    [self failLoadOrNavigation: error];
+}
+
+// Delegate for WKWebView 2
+- (void) webView: (WKWebView *) webView didFailNavigation: (WKNavigation *) navigation withError: (NSError *) error
+{
+    [self failLoadOrNavigation: error];
+}
+
+
+
+
 
 - (void)viewWillAppear:(BOOL)animated {
 	if (self.mTabBarCallback != nil) {

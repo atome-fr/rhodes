@@ -631,7 +631,7 @@
 }
 
 // RhoMainView implementation
-- (UIWebView*)detachWebView {
+- (UIView*)detachWebView {
     int n = [self activeTab];
     return [[self subView:n] detachWebView];
 }
@@ -755,7 +755,7 @@
     return tabindex;
 }
 
-- (UIWebView*)getWebView:(int)tab_index {
+- (UIView*)getWebView:(int)tab_index {
 	if (tab_index == -1) {
 		tab_index = [self activeTab];
 	}

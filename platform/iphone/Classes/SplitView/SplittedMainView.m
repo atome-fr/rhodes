@@ -238,7 +238,7 @@ static void updateViewRect(CGRect* pRect)
 }
 
 
-- (UIWebView*)detachWebView {
+- (UIView*)detachWebView {
 	RightViewController* rvc = [self getRightViewController];
 	return [rvc detachWebView];
 }
@@ -329,7 +329,7 @@ static void updateViewRect(CGRect* pRect)
 	[rvc removeNavBar];
 }
 
-- (UIWebView*)getWebView:(int)tab_index {
+- (UIView*)getWebView:(int)tab_index {
 	RightViewController* rvc = [self getRightViewController];
 	return [rvc getWebView:tab_index];
 }

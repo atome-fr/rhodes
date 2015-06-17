@@ -269,7 +269,7 @@ static RhoNativeViewManagerOC *instance = NULL;
 	[sharedInstance.mProviders removeObjectForKey:viewType];
 }
 
-+(UIWebView*)getWebViewObject:(int)tab_index {
++(UIView*)getWebViewObject:(int)tab_index {
 	return [[[Rhodes sharedInstance] mainView] getWebView:tab_index];
 }
 

@@ -25,12 +25,13 @@
 *------------------------------------------------------------------------*/
 
 #import <UIKit/UIKit.h>
+#import "WebViewMerger.h"
 
 @protocol RhoMainView
 
 - (UIView*)view;
 
-- (UIWebView*)detachWebView;
+- (UIView<WebViewMerger>*)detachWebView;
 
 - (void)loadHTMLString:(NSString*)data;
 
@@ -51,7 +52,7 @@
 - (void)addNavBar:(NSString*)title left:(NSArray*)left right:(NSArray*)right;
 - (void)removeNavBar;
 
-- (UIWebView*)getWebView:(int)tab_index;
+- (UIView<WebViewMerger>*)getWebView:(int)tab_index;
 
 -(void)openNativeView:(UIView*)nv_view tab_index:(int)tab_index;
 -(void)closeNativeView:(int)tab_index;
