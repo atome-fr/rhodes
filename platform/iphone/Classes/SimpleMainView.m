@@ -376,9 +376,12 @@ static BOOL makeHiddenUntilLoadContent = YES;
 
 - (UIView*)newWebView:(CGRect)frame {
 
+   BOOL useWKWebViewConf = false;
    const char* conf = get_app_build_config_item("WKWebView");
-   NSString *confStr = [NSString stringWithUTF8String:conf];
-   BOOL useWKWebViewConf = [confStr boolValue];
+   if(conf != NULL){
+       NSString *confStr = [NSString stringWithUTF8String:conf];
+       useWKWebViewConf = [confStr boolValue];
+   }
 
    UIView<WebViewMerger>* w;
    if (NSClassFromString(@"WKWebView") && useWKWebViewConf) {
