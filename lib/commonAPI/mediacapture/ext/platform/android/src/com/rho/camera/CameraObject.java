@@ -1,5 +1,6 @@
 package com.rho.camera;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -21,6 +22,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -111,10 +113,21 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
         @Override public int D2() { return width * width + height * height; }
         @Override public String toString() { return "" + width + "X" + height; }
     }
-
+    
+     @Override
+	public void getAllProperties(IMethodResult result) {
+		// TODO Auto-generated method stub
+    	Map<String, Object> props = new HashMap<String, Object>();
+    	for (String key: getPropertiesMap().keySet()) {
+    		 props.put(key, cameraPropGet(key));
+        }
+    	result.set(props);
+	}
+	
     protected class TakePictureCallback implements Camera.PictureCallback {
         private Activity mPreviewActivity;
         MediaPlayer mp;
+        Bitmap bitmap = null;
         TakePictureCallback(Activity previewActivity) {
             mPreviewActivity = previewActivity;
         }
@@ -122,7 +135,6 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
         public void onPictureTaken(byte[] data, Camera camera) {        	
             Intent intent = new Intent();
             OutputStream stream = null;
-            Bitmap bitmap = null;
             try {
             	
                 final Map<String, String> propertyMap = getActualPropertyMap();
@@ -154,7 +166,7 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
                    userFilePath = filePath;
          	}
          	else{
-                   filePath = propertyMap.get("fileName");
+                   filePath = propertyMap.get("fileName")+ ".jpg";
                    userFilePath = filePath;
 				   if(filePath.contains("\\")){
 						intent.putExtra("error", "Invalid file path");
@@ -164,9 +176,20 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
                 BitmapFactory.Options options=new BitmapFactory.Options();
 		options.inPurgeable = true;
                 bitmap = BitmapFactory.decodeByteArray(data, 0, data.length, options);
+                Matrix m = new Matrix();
+                android.hardware.Camera.CameraInfo info = new android.hardware.Camera.CameraInfo();
+                android.hardware.Camera.getCameraInfo(getCameraIndex(), info);
+                if (info.facing == android.hardware.Camera.CameraInfo.CAMERA_FACING_FRONT && OrientationListnerService.mRotation == 90) {
+                    		m.postRotate(270);
+                	}else if(info.facing == android.hardware.Camera.CameraInfo.CAMERA_FACING_FRONT && OrientationListnerService.mRotation == 270){
+              			m.postRotate(90);
+                	}else{
+              			m.postRotate(OrientationListnerService.mRotation);
+                	}
+                bitmap = Bitmap.createBitmap(bitmap , 0, 0, bitmap.getWidth(), bitmap.getHeight(), m, true);
                  if (outputFormat.equalsIgnoreCase("dataUri")) {
                     Logger.T(TAG, "outputFormat: " + outputFormat);   
-                    filePath = getTemporaryPath(filePath)+ ".jpg";
+                //    filePath = getTemporaryPath(filePath)+ ".jpg";
                     if (Boolean.parseBoolean(propertyMap.get("saveToDeviceGallery"))) 
                     {                        
                         ContentResolver contentResolver = ContextFactory.getContext().getContentResolver();
@@ -194,6 +217,7 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
 
                     				if(isSDPresent)
                     				{
+                    					byte[] byteArray = null;
                     					int lastIndex = userFilePath.lastIndexOf("/");
                     					
                     					String subfolderName = userFilePath.replaceAll("/sdcard", "");
@@ -207,22 +231,43 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
                     					
                     					stream = new FileOutputStream(directory +File.separator  + file_name+".jpg");                        
                 	                    resultUri = Uri.fromFile(new File(directory +File.separator  + file_name+".jpg"));                        
-                	                    stream.write(data);    
-                	                    stream.flush();                        
-                	                    stream.close();
+                	                    if(bitmap != null){
+                  	                    	ByteArrayOutputStream bytestream = new ByteArrayOutputStream();
+                  	                    	bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bytestream);
+                  	                    	byteArray = bytestream.toByteArray();
+                  	                    	stream.write(byteArray);    
+                  		                stream.flush();                        
+                  		                stream.close();
+                  	                    }
                     			}
                       }else{
   	                    stream = new FileOutputStream(filePath);                        
   	                    resultUri = Uri.fromFile(new File(filePath));                         
-	                    stream.write(data);    
-	                    stream.flush();                        
-	                    stream.close();
+	                    byte[] byteArray = null;
+  	                    if(bitmap != null){
+  	                    	ByteArrayOutputStream bytestream = new ByteArrayOutputStream();
+  	                    	bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bytestream);
+  	                    	byteArray = bytestream.toByteArray();
+  	                    	stream.write(byteArray);    
+  		                stream.flush();                        
+  		                stream.close();
+  	                    }
                       }
 	                    //CameraRhoListener.getInstance().copyImgAsUserChoice(filePath);
                     }
+                    byte[] byteArray = null;
+                    stream = new FileOutputStream(filePath);
+	                    if(bitmap != null){
+	                    	ByteArrayOutputStream bytestream = new ByteArrayOutputStream();
+	                    	bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bytestream);
+	                    	byteArray = bytestream.toByteArray();
+	                    	stream.write(byteArray);    
+		                stream.flush();                        
+		                stream.close();
+	                    }
                     StringBuilder dataBuilder = new StringBuilder();
                     dataBuilder.append("data:image/jpeg;base64,");
-                    dataBuilder.append(Base64.encodeToString(data, false));
+                    dataBuilder.append(Base64.encodeToString(byteArray, false));
                     propertyMap.put("captureUri", dataBuilder.toString());
                     propertyMap.put("dataURI", "datauri_value");
                     Logger.T(TAG, dataBuilder.toString());
@@ -231,7 +276,7 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
                     mPreviewActivity.setResult(Activity.RESULT_OK, intent);                    
                 } else
                 if (outputFormat.equalsIgnoreCase("image")) {
-                    filePath = getTemporaryPath(filePath)+ ".jpg";
+                //    filePath = getTemporaryPath(filePath)+ ".jpg";
                     Logger.T(TAG, "outputFormat: " + outputFormat + ", path: " + filePath);                    
                     if (Boolean.parseBoolean(propertyMap.get("saveToDeviceGallery"))) 
                     {                        
@@ -253,9 +298,15 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
                     {                    	
                         stream = new FileOutputStream(filePath);                        
                         resultUri = Uri.fromFile(new File(filePath));                        
-                        stream.write(data);                       
-                        stream.flush();                        
-                        stream.close();                       
+                        byte[] byteArray = null;
+  	                    if(bitmap != null){
+  	                    	ByteArrayOutputStream bytestream = new ByteArrayOutputStream();
+  	                    	bitmap.compress(Bitmap.CompressFormat.JPEG, 100, bytestream);
+  	                    	byteArray = bytestream.toByteArray();
+  	                    	stream.write(byteArray);                       
+  	                        stream.flush();                        
+  	                        stream.close();
+  	                 }                       
                     }
                        
                     intent.putExtra(MediaStore.EXTRA_OUTPUT, resultUri);
@@ -408,7 +459,16 @@ public void getProperties(List<String> arrayofNames, IMethodResult result) {
                  parameters.setPreviewSize(previewSize.width, previewSize.height);
         	}
         	else if(desired_width > maxSize.width || desired_height > maxSize.height){        		
-        		parameters.setPreviewSize(maxSize.width , maxSize.height);       
+        		final Camera.Parameters newParam=parameters;
+        		final android.hardware.Camera.Size newMaxSize = sizes.get(0);
+        		RhodesActivity.safeGetInstance().runOnUiThread(new Runnable() {  			
+        						
+					@Override
+					public void run() {
+						// TODO Auto-generated method stub
+						newParam.setPreviewSize(newMaxSize.width , newMaxSize.height);
+					}
+				});       
         	}
         	else{ 
         		parameters.setPreviewSize(320, 240);

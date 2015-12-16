@@ -34,7 +34,10 @@ import com.rhomobile.rhodes.RhoConf;
 import com.rhomobile.rhodes.RhodesActivity;
 import com.rhomobile.rhodes.RhodesService;
 import com.rhomobile.rhodes.extmanager.IRhoExtension;
+import com.rhomobile.rhodes.extmanager.IRhoConfig;
 import com.rhomobile.rhodes.extmanager.RhoExtManager;
+import com.rhomobile.rhodes.mainview.TabbedMainView;
+import com.rhomobile.rhodes.webview.WebViewConfig;
 
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -122,7 +125,15 @@ public class RhoWebViewClient extends WebViewClient
         
         //RhoElements implementation of "history:back"
         if(url.equalsIgnoreCase("history:back")) {
+        	Logger.I(TAG, "history:back");
         	view.goBack();
+        	return true;
+        }
+        else if(url.equalsIgnoreCase("history:twiceback")) 
+        {
+            Logger.I(TAG, "history:twiceback");
+        	view.goBack();
+		view.goBack();
         	return true;
         }
         
@@ -169,16 +180,25 @@ public class RhoWebViewClient extends WebViewClient
         Logger.profStop("BROWSER_PAGE");
 
         // Set title
-        String title = view.getTitle();
+       // String title = view.getTitle();
         try {
-            RhodesActivity.safeGetInstance().setTitle(title);
-
+            //RhodesActivity.safeGetInstance().setTitle(title);
+	checkTitleDataContain(view);
             if (mWebView.getConfig() != null && mWebView.getConfig().getBool(WebViewConfig.ENABLE_PAGE_LOADING_INDICATION))
                 RhodesActivity.safeGetInstance().getWindow().setFeatureInt(Window.FEATURE_PROGRESS, RhodesActivity.MAX_PROGRESS);
         } catch (Throwable ex) {
             //Do nothing. Just for case if activity has been destroyed in between.
         }
-
+        if ((url.trim().equalsIgnoreCase("data:text/html,")
+				&& view.getTitle() != null && view.getTitle().equalsIgnoreCase(
+				"data:text/html,"))
+				|| (url.trim().equalsIgnoreCase("data:,") && view.getTitle() == null)) {
+			String temp = RhodesActivity.safeGetInstance().getMainView().getTabDefaultUrl();
+			if(temp != null && !temp.isEmpty()) {
+				url = temp;
+				view.loadUrl(url);
+			}
+        }
         RhoExtManager.getImplementationInstance().onNavigateComplete(view, url);
         //CookieSyncManager.getInstance().sync();
 
@@ -231,9 +251,34 @@ public class RhoWebViewClient extends WebViewClient
     
     @Override
     public void onReceivedHttpAuthRequest (WebView view, HttpAuthHandler handler, String host, String realm) {
-        HttpAuthResult authResult = new HttpAuthResult(handler, host, realm);
-        RhoExtManager.getImplementationInstance().onAuthRequest(view, authResult);
+    	IRhoConfig rhoelementsGetConfig =  RhoExtManager.getInstance().getConfig("rhoelementsext");
+		if(rhoelementsGetConfig != null){
+			HttpAuthResult authResult = new HttpAuthResult(handler, host, realm);
+    		String password = rhoelementsGetConfig.getString(WebViewConfig.AUTH_PASSWORD);
+    		String username = rhoelementsGetConfig.getString(WebViewConfig.AUTH_USERNAME);
+    		if(username != null && password !=null){
+				if(password.length() > 0 &&  username.length() > 0){
+		    		 username = rhoelementsGetConfig.getString(WebViewConfig.AUTH_USERNAME);
+		    		 password = rhoelementsGetConfig.getString(WebViewConfig.AUTH_PASSWORD);
+		    		  authResult.proceed(username,password);
+				}else{
+					  RhoExtManager.getImplementationInstance().onAuthRequest(view, authResult);
+				}
+	    	}else{
+	    		  RhoExtManager.getImplementationInstance().onAuthRequest(view, authResult);
+	    	}
+		}else{
+			HttpAuthResult authResult = new HttpAuthResult(handler, host, realm);
+			RhoExtManager.getImplementationInstance().onAuthRequest(view, authResult);
+		}
+      }
+     private void checkTitleDataContain(WebView view){
+    	// Set title
+        String title = view.getTitle();
+    	if(! (title.equalsIgnoreCase("data:text/html,") || title.equalsIgnoreCase("data:,") 
+    			|| title.contains("about:blank"))){
+    		RhodesActivity.safeGetInstance().setTitle(title);
+    	}
     }
-    
     
 }

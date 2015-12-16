@@ -153,6 +153,7 @@ def make_application_build_config_header_file
   #f.puts "// Generated #{Time.now.to_s}"
   f.puts ""
   f.puts "#include <string.h>"
+  f.puts "#include <common/RhoConf.h>"
   f.puts ""
   f.puts '//#include "app_build_configs.h"'
   if $rhosimulator_build
@@ -183,11 +184,17 @@ def make_application_build_config_header_file
   f.puts ''
   f.puts 'const char* get_app_build_config_item(const char* key) {'
   f.puts '  int i;'
+  f.puts '  const char* szValue;'
   if $rhosimulator_build
     f.puts '  if (strcmp(key, "security_token") == 0) {'
     f.puts '    return rho_simconf_getString("security_token");'
     f.puts '  }'
   end
+  f.puts ""
+  f.puts '  szValue = rho_conf_getString(key);'
+  f.puts '  if (strcmp(szValue, "") != 0)'
+  f.puts '    return szValue;'
+  f.puts ""
   f.puts '  for (i = 1; i < APP_BUILD_CONFIG_COUNT; i++) {'
   f.puts '    if (strcmp(key, keys[i]) == 0) {'
   f.puts '      return values[i];'
@@ -2817,12 +2824,27 @@ namespace "config" do
         $app_config['extensions'] = $app_config['extensions'] | ['indicators']
         $app_config['extensions'] = $app_config['extensions'] | ['hardwarekeys']
         $app_config['extensions'] = $app_config['extensions'] | ['sensor']
+         $app_config['extensions'] = $app_config['extensions'] | ['sip']
       end
       
       if $current_platform == "wp8"
         $app_config['extensions'] = $app_config['extensions'] | ['barcode']
       end
-      
+   end
+
+   if $current_platform == "android"
+        if $app_config['extensions'].index('rhoelementsext')
+          $app_config['extensions'].delete('rhoelementsext')
+          $app_config['extensions'].unshift('rhoelementsext')
+        end
+        if $app_config['extensions'].index('emdk3-manager')
+          $app_config['extensions'].delete('emdk3-manager')
+          $app_config['extensions'].unshift('emdk3-manager')
+        elsif $app_config['extensions'].index('barcode') || $app_config['extensions'].index('indicators') || $app_config['extensions'].index('mobile_payment') || $app_config['extensions'].index('smartCradle')
+		      #Barcode has dependency on emdk3-manager. So load it if barcode is present
+		      $app_config['extensions'].unshift('emdk3-manager')
+        end
+        $app_config['extensions'].unshift('coreapi')
     end
 
     #if $app_config['extensions'].index('rhoelementsext')
@@ -3335,14 +3357,14 @@ def init_extensions(dest, mode = "")
           end
 
           if entry && entry.length() > 0
-            if xml_api_paths.nil? #&& !("rhoelementsext" == extname && ($config["platform"] == "wm"||$config["platform"] == "android"))
+            if xml_api_paths.nil? #&& !(("rhoelementsext" == extname || "dominjector" == extname ) && ($config["platform"] == "wm"||$config["platform"] == "android"))
 
               $ruby_only_extensions_list = [] unless $ruby_only_extensions_list
               $ruby_only_extensions_list << extname
 
-              if ("rhoelementsext" == extname && ($config["platform"] == "wm"||$config["platform"] == "android"))
+              if (("rhoelementsext" == extname || "dominjector" == extname) && ($config["platform"] == "wm"||$config["platform"] == "android"))
                 extentries << entry
-                extentries_init << entry
+                extentries_init << entry             
               elsif !$js_application
                 extentries << entry
                 entry =  "if (rho_ruby_is_started()) #{entry}"
@@ -3504,7 +3526,8 @@ def init_extensions(dest, mode = "")
         puts 'extjsmodulefiles=' + extjsmodulefiles.to_s
         write_modules_js(rhoapi_js_folder, "rhoapi-modules.js", extjsmodulefiles, do_separate_js_modules)
 
-        if $use_shared_runtime || $shared_rt_js_appliction
+        $ebfiles_shared_rt_js_appliction = ($js_application and ($current_platform == "wm" or $current_platform == "android") and $app_config["capabilities"].index('shared_runtime'))
+        if $use_shared_runtime || $ebfiles_shared_rt_js_appliction
           start_path = Dir.pwd
           chdir rhoapi_js_folder
 
@@ -3889,7 +3912,14 @@ namespace "build" do
       cp   compileERB, $srcdir
       puts "Running bb.rb"
 
-      puts `#{$rubypath} -I"#{rhodeslib}" "#{$srcdir}/bb.rb"`
+      cmd_str = "#{$rubypath} -I#{rhodeslib} #{$srcdir}/bb.rb"
+      if defined?(Bundler)
+        Bundler.with_clean_env do
+          puts `#{cmd_str}`
+        end
+      else
+        puts `#{cmd_str}`
+      end
       unless $? == 0
         puts "Error interpreting erb code"
         exit 1
@@ -4019,8 +4049,14 @@ namespace "build" do
         create_manifest
         cp compileERB, $srcdir
         puts "Running default.rb"
-
-        puts `#{$rubypath} -I"#{rhodeslib}" "#{$srcdir}/default.rb"`
+        cmd_str = "#{$rubypath} -I#{rhodeslib} #{$srcdir}/default.rb"
+        if defined?(Bundler)
+          Bundler.with_clean_env do
+            puts `#{cmd_str}`
+          end
+        else
+          puts `#{cmd_str}`
+        end
         unless $? == 0
           puts "Error interpreting erb code"
           exit 1
@@ -4030,7 +4066,14 @@ namespace "build" do
 
         cp   compileRB, $srcdir
         puts "Running compileRB"
-        puts `#{$rubypath} -I"#{rhodeslib}" "#{$srcdir}/compileRB.rb"`
+        cmd_str = "#{$rubypath} -I#{rhodeslib} #{$srcdir}/compileRB.rb"
+        if defined?(Bundler)
+          Bundler.with_clean_env do
+            puts `#{cmd_str}`
+          end
+        else
+          puts `#{cmd_str}`
+        end
         unless $? == 0
           puts "Error interpreting ruby code"
           exit 1
@@ -4978,6 +5021,23 @@ namespace :dev do
   end
 
 end
+
+
+namespace :config do
+  namespace :common do
+    task :ymlsetup do
+      #Setting build.yml configs in rhoconfig.txt for cloud
+      File.open("#{$app_path}/rhoconfig.txt", "a") do |f|
+        f << "\n\n# Settings for cloud from build.yml\n"
+        $application_build_configs.each do |k,v|
+          f << "#{k}=\"#{v}\"\n"
+        end
+        f << "\n"
+      end
+    end
+  end
+end
+
 
 $running_time = []
 

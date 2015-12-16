@@ -36,6 +36,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.webkit.URLUtil;
+import android.webkit.MimeTypeMap;
 
 public class LocalFileHandler implements UriHandler
 {
@@ -73,13 +74,37 @@ public class LocalFileHandler implements UriHandler
         int intentFlags = 0;
         Uri path = Uri.parse(url);
 
-        Uri newUri = LocalFileProvider.overrideUri(path);
+        //Uri newUri = LocalFileProvider.overrideUri(path);
+        Uri newUri = LocalFileProvider.overrideSystemUri(path);
         if(newUri != null) {
             intentFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION;
             url = Uri.decode(newUri.toString());
         }
-
+        intentFlags=Intent.FLAG_GRANT_READ_URI_PERMISSION;
         Intent intent = Intent.parseUri(url, intentFlags);
+        if(newUri==null && url.contains("file://"))
+       {
+    	   intent.setAction(Intent.ACTION_VIEW);
+    	    try{
+        	   String extension = MimeTypeMap.getFileExtensionFromUrl(url);
+        	   String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        	    if(mimeType!=null && mimeType.contains("image"))
+        	    	intent.setDataAndType(path, "image/*");
+        	    else if(mimeType!=null && mimeType.contains("audio"))
+        	    	intent.setDataAndType(path, "audio/*");
+				else if(mimeType!=null && mimeType.contains("video"))
+        	    	intent.setDataAndType(path, "video/*");	
+        	    else
+        	    	intent.setDataAndType(path, "*/*");
+        	   }
+        	   catch(Exception ex)
+        	   {
+        		   Logger.E(TAG, ex.getMessage());
+        		   intent.setDataAndType(path, "*/*");
+        	   }
+    	   
+    	
+   	   }
         ctx.startActivity(Intent.createChooser(intent, "Open in..."));
 
         return true;

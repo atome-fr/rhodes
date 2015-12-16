@@ -77,6 +77,7 @@ import com.rhomobile.rhodes.util.PhoneId;
 import com.rhomobile.rhodes.util.Utils;
 //import com.rhomobile.rhodes.camera.Camera;
 
+import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -108,12 +109,17 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.Process;
+import android.text.InputType;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.RemoteViews;
+import android.widget.EditText;
+import android.os.Environment;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager.NameNotFoundException;
 
 
 import java.util.Enumeration;
@@ -168,6 +174,29 @@ public class RhodesService extends Service {
 	
 	private boolean mNeedGeoLocationRestart = false;
 	
+	public static String               m_Text                      = "";
+	private static String				ExitPasswordEnabled         = "";
+	private static String				ExitPasswordValue           = "";
+	
+	public static  void setExitPasswordEnabled(String exitPasswordEnabled)
+	{ 
+	  ExitPasswordEnabled=exitPasswordEnabled;
+	}
+	
+	public static  void setExitPasswordValue(String exitPasswordValue)
+	{
+		ExitPasswordValue=exitPasswordValue;
+	}
+	
+	public static  String getExitPasswordEnabled()
+	{
+		return ExitPasswordEnabled;
+	}
+	
+	public static  String getExitPasswordValue()
+	{
+		return ExitPasswordValue;
+	}
 	class PowerWakeLock {
 	    private PowerManager.WakeLock wakeLockObject = null;
 	    private boolean wakeLockEnabled = false;
@@ -293,6 +322,19 @@ public class RhodesService extends Service {
 
 	    return phoneId;
 	}
+		public static void setStartPath(String startPath)
+	{
+	         String startPathName = "start_path";
+		 String externalSharedPath = Environment.getExternalStorageDirectory().getAbsolutePath() ;
+		 StringBuffer str = new StringBuffer(startPath);
+		 if(startPath.contains("file") && !startPath.contains("sdcard") && !startPath.contains("internal"))
+		 {
+		 	int index=7;
+		 str = str.insert(7,externalSharedPath);
+		 }
+		 if(startPath != null)
+          		RhoConf.setString(startPathName, str.toString());
+	}
 	
 	public class LocalBinder extends Binder {
 		RhodesService getService() {
@@ -405,7 +447,9 @@ public class RhodesService extends Service {
             Logger.E(TAG, "Can't handle service command");
             Logger.E(TAG, e);
 		}
-		return Service.START_STICKY;
+		// From start_sticky yo start_not_sticky is done because we dont want OS to start service incase of low memory and recovery. Anyways it is started
+		//by the BaseActivity so to maintain the same state it is better if OS does NOT restart.SR EMBPD00183300
+		return Service.START_NOT_STICKY;
 	}
 	
 	private void handleCommand(Intent intent, int startId) {
@@ -544,32 +588,55 @@ public class RhodesService extends Service {
 		Logger.I(TAG, "kkkill !!!");
 		Process.killProcess(Process.myPid());
 	}
-	
+	private static void displayAlertForPassword()
+	{
+		PerformOnUiThread.exec(new Runnable(){
+			
+			@Override
+			public void run() {
+				PasswordDialog.createpopup();						
+				
+				
+			}
+		});
+	}
+	public static void PerformRealExit()
+	{
+		  PerformOnUiThread.exec(new Runnable() {
+		        @Override
+		        public void run() {
+	                Logger.I(TAG, "Exit application");
+	                try {
+	                    // Do this fake state change in order to make processing before server is stopped
+	                    RhodesApplication.stateChanged(RhodesApplication.UiState.MainActivityPaused);
+	        
+	                    RhodesService service = RhodesService.getInstance();
+	                    if (service != null)
+	                    {
+	                        Logger.I(TAG, "stop RhodesService");
+	                        service.wakeLock.reset();
+	                        service.stopSelf();
+	                    }
+	                    
+	                    Logger.I(TAG, "stop RhodesApplication");
+	                    RhodesApplication.stop();
+	                }
+	                catch (Exception e) {
+	                    Logger.E(TAG, e);
+	                }
+		        }
+		    });
+	}
 	public static void exit() {
-	    PerformOnUiThread.exec(new Runnable() {
-	        @Override
-	        public void run() {
-                Logger.I(TAG, "Exit application");
-                try {
-                    // Do this fake state change in order to make processing before server is stopped
-                    RhodesApplication.stateChanged(RhodesApplication.UiState.MainActivityPaused);
-        
-                    RhodesService service = RhodesService.getInstance();
-                    if (service != null)
-                    {
-                        Logger.I(TAG, "stop RhodesService");
-                        service.wakeLock.reset();
-                        service.stopSelf();
-                    }
-                    
-                    Logger.I(TAG, "stop RhodesApplication");
-                    RhodesApplication.stop();
-                }
-                catch (Exception e) {
-                    Logger.E(TAG, e);
-                }
-	        }
-	    });
+		if(getExitPasswordEnabled().equals("1"))
+		{      
+	                if(getExitPasswordValue().equals(""))
+                 	PerformRealExit();		
+			else
+			displayAlertForPassword();
+		}
+		else
+			PerformRealExit();
 	}
 	
 	public static void showAboutDialog() {
@@ -741,6 +808,20 @@ public class RhodesService extends Service {
         else
             return 0;
     }
+    
+    public static int getRealScreenWidth() {
+        if (BaseActivity.getScreenProperties() != null)
+            return BaseActivity.getScreenProperties().getRealWidth();
+        else
+            return 0;
+    }
+	
+    public static int getRealScreenHeight() {
+        if (BaseActivity.getScreenProperties() != null)
+            return BaseActivity.getScreenProperties().getRealHeight();
+        else
+            return 0;
+    }
 
     public static float getScreenPpiX() {
         if (BaseActivity.getScreenProperties() != null)
@@ -775,15 +856,18 @@ public class RhodesService extends Service {
 				return Integer.valueOf(getScreenWidth());
 			else if (name.equalsIgnoreCase("screen_height"))
 				return Integer.valueOf(getScreenHeight());
+			else if (name.equalsIgnoreCase("real_screen_width"))
+				return Integer.valueOf(getRealScreenWidth());
+			else if (name.equalsIgnoreCase("real_screen_height"))
+				return Integer.valueOf(getRealScreenHeight());
 			else if (name.equalsIgnoreCase("screen_orientation")) {
-			    int orientation = getScreenOrientation();
+				int orientation = getScreenOrientation();
 				if ((orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
-				 || (orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE))
+						|| (orientation == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE))
 					return "landscape";
 				else
 					return "portrait";
-			}
-			else if (name.equalsIgnoreCase("has_network"))
+			} else if (name.equalsIgnoreCase("has_network"))
 				return Boolean.valueOf(hasNetwork());
 			else if (name.equalsIgnoreCase("has_wifi_network"))
 				return Boolean.valueOf(hasWiFiNetwork());
@@ -794,84 +878,72 @@ public class RhodesService extends Service {
 			else if (name.equalsIgnoreCase("ppi_y"))
 				return Float.valueOf(getScreenPpiY());
 			else if (name.equalsIgnoreCase("phone_number")) {
-                Context context = ContextFactory.getContext();
-                String number = "";
-                if (context != null) {
-                    TelephonyManager manager = (TelephonyManager)context.getSystemService(Context.TELEPHONY_SERVICE);
-                    number = manager.getLine1Number();
-                    Logger.I(TAG, "Phone number: " + number);
-                }
+				Context context = ContextFactory.getContext();
+				String number = "";
+				if (context != null) {
+					TelephonyManager manager = (TelephonyManager) context
+							.getSystemService(Context.TELEPHONY_SERVICE);
+					number = manager.getLine1Number();
+					Logger.I(TAG, "Phone number: " + number);
+				}
 				return number;
-			}
-			else if (name.equalsIgnoreCase("device_owner_name")) {
-				return AndroidFunctionalityManager.getAndroidFunctionality().AccessOwnerInfo_getUsername(getContext());
-			}
-			else if (name.equalsIgnoreCase("device_owner_email")) {
-				return AndroidFunctionalityManager.getAndroidFunctionality().AccessOwnerInfo_getEmail(getContext());
-			}
-			else if (name.equalsIgnoreCase("device_name")) {
+			} else if (name.equalsIgnoreCase("device_owner_name")) {
+				return AndroidFunctionalityManager.getAndroidFunctionality()
+						.AccessOwnerInfo_getUsername(getContext());
+			} else if (name.equalsIgnoreCase("device_owner_email")) {
+				return AndroidFunctionalityManager.getAndroidFunctionality()
+						.AccessOwnerInfo_getEmail(getContext());
+			} else if (name.equalsIgnoreCase("device_name")) {
 				return Build.MANUFACTURER + " " + Build.DEVICE;
-			}
-			else if (name.equalsIgnoreCase("is_emulator")) {
-			    String strDevice = Build.DEVICE;
-				return Boolean.valueOf(strDevice != null && strDevice.equalsIgnoreCase("generic"));
-			}
-			else if (name.equalsIgnoreCase("os_version")) {
+			} else if (name.equalsIgnoreCase("is_emulator")) {
+				String strDevice = Build.DEVICE;
+				return Boolean.valueOf(strDevice != null
+						&& strDevice.equalsIgnoreCase("generic"));
+			} else if (name.equalsIgnoreCase("os_version")) {
 				return Build.VERSION.RELEASE;
-			}
-			else if (name.equalsIgnoreCase("has_calendar")) {
+			} else if (name.equalsIgnoreCase("has_calendar")) {
 				return Boolean.valueOf(EventStore.hasCalendar());
+			} else if (name.equalsIgnoreCase("phone_id")) {
+				RhodesService service = RhodesService.getInstance();
+				if (service != null) {
+					PhoneId phoneId = service.getPhoneId();
+					return phoneId.toString();
+				} else {
+					return "";
+				}
+			} else if (name.equalsIgnoreCase("webview_framework")) {
+				return RhodesActivity.safeGetInstance().getMainView()
+						.getWebView(-1).getEngineId();
+			} else if (name.equalsIgnoreCase("is_symbol_device")
+					|| name.equalsIgnoreCase("is_motorola_device")) {
+				return isSymbolDevice();
+			} else if (name.equalsIgnoreCase("oem_info")) {
+				return Build.PRODUCT;
+			} else if (name.equalsIgnoreCase("uuid")) {
+				return fetchUUID();
+			} else if (name.equalsIgnoreCase("has_camera")) {
+				boolean hasCamera = false;
+				/*
+				 * try { if (Camera.getCameraService() != null) { if
+				 * ((Camera.getCameraService().getMainCamera() != null) ||
+				 * (Camera.getCameraService().getFrontCamera() != null)) {
+				 * hasCamera = true; } } } catch (Throwable e) {
+				 * e.printStackTrace(); Logger.E(TAG,
+				 * "Exception during detect Camera for has_camera"); }
+				 */
+				int noofCameras = Camera.getNumberOfCameras();
+				hasCamera = noofCameras == 0 ? false : true;
+				return hasCamera;// Boolean.TRUE;
+			} else {
+				return RhoExtManager.getImplementationInstance().getProperty(
+						name);
 			}
-			else if (name.equalsIgnoreCase("phone_id")) {
-                RhodesService service = RhodesService.getInstance();
-                if (service != null) {
-                    PhoneId phoneId = service.getPhoneId();
-                    return phoneId.toString();
-                } else {
-                    return "";
-                }
-            }
-            else if (name.equalsIgnoreCase("webview_framework")) {
-                return RhodesActivity.safeGetInstance().getMainView().getWebView(-1).getEngineId();
-            }
-            else if (name.equalsIgnoreCase("is_symbol_device") ||
-                    name.equalsIgnoreCase("is_motorola_device")) {
-                return isSymbolDevice();
-            }
-            else if (name.equalsIgnoreCase("oem_info")) {
-                return Build.PRODUCT;
-            }
-            else if (name.equalsIgnoreCase("uuid")) {
-                return fetchUUID();
-            }
-            else if (name.equalsIgnoreCase("has_camera")) {
-            	boolean hasCamera = false;
-            	/*try {
-            		if (Camera.getCameraService() != null) {
-            			if ((Camera.getCameraService().getMainCamera() != null) || (Camera.getCameraService().getFrontCamera() != null)) {
-            				hasCamera = true;
-            			}
-            		}
-            	}
-            	catch (Throwable e) {
-            		e.printStackTrace();
-            		Logger.E(TAG, "Exception during detect Camera for has_camera");
-            	}
-				*/
-            	int noofCameras=Camera.getNumberOfCameras();
-            	hasCamera=noofCameras==0?false:true;
-                return hasCamera;//Boolean.TRUE;
-            }
-            else {
-                return RhoExtManager.getImplementationInstance().getProperty(name);
-            }
-        }
-		catch (Exception e) {
+		} catch (Exception e) {
 			Logger.E(TAG, "Can't get property \"" + name + "\": " + e);
 		}
-		
+
 		return null;
-	}
+    }
     
     public static Boolean isSymbolDevice() {
         Boolean res = false;
@@ -1558,4 +1630,5 @@ public class RhodesService extends Service {
     public static void removeSplashScreen() {
         getInstance().getMainView().removeSplashScreen();
     }
+    
 }

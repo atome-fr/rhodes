@@ -51,6 +51,8 @@ public class BaseActivity extends Activity implements ServiceConnection {
 	
 	private static final boolean DEBUG = false;
 	
+	private static boolean setFullScreenFlag = false;
+	
 	public static final String INTENT_SOURCE = BaseActivity.class.getName();
 	
 	public boolean mEnableScreenOrientationOverride = false;
@@ -58,6 +60,8 @@ public class BaseActivity extends Activity implements ServiceConnection {
     public static class ScreenProperties {
         private int mScreenWidth;
         private int mScreenHeight;
+        private int mRealScreenWidth;
+        private int mRealScreenHeight;
         private int mScreenOrientation;
         private float mScreenPpiX;
         private float mScreenPpiY;
@@ -73,10 +77,14 @@ public class BaseActivity extends Activity implements ServiceConnection {
             WindowManager wm = (WindowManager)context.getSystemService(Context.WINDOW_SERVICE);
 
             Display d = wm.getDefaultDisplay();
-
+	    float dpr = RhodesActivity.getContext().getResources().getDisplayMetrics().density;
+            
             mScreenWidth = d.getWidth();
             mScreenHeight = d.getHeight();
-
+            
+            mRealScreenWidth = (int) (d.getWidth() / dpr);
+            mRealScreenHeight = (int) (d.getHeight() / dpr);
+	
             DisplayMetrics metrics = new DisplayMetrics();
             d.getMetrics(metrics);
 
@@ -90,6 +98,8 @@ public class BaseActivity extends Activity implements ServiceConnection {
         
         public int getWidth() { return mScreenWidth; }
         public int getHeight() { return mScreenHeight; }
+        public int getRealWidth() { return mRealScreenWidth; }
+        public int getRealHeight() { return mRealScreenHeight; }
         public int getOrientation() { return mScreenOrientation; }
         public float getPpiX() { return mScreenPpiX; }
         public float getPpiY() { return mScreenPpiY; }
@@ -194,7 +204,12 @@ public class BaseActivity extends Activity implements ServiceConnection {
 	@Override
 	protected void onDestroy() {
 		if (mBoundToService) {
+			Logger.T(TAG, "unbindService and stopService");
 			unbindService(this);
+			//SPR28363fix Start
+			Intent stopServiceIntent=new Intent(this,RhodesService.class);
+			this.stopService(stopServiceIntent);
+			//SPR28363fix End
 			mBoundToService = false;
 		}
 		super.onDestroy();
@@ -209,7 +224,14 @@ public class BaseActivity extends Activity implements ServiceConnection {
     @Override
     protected void onResume() {
         super.onResume();
-        setFullScreen(sFullScreen);
+        if((RhoConf.isExist("full_screen") ? RhoConf.getBool("full_screen") : false ) && setFullScreenFlag ==false){
+        	 setFullScreen(true);
+        }else if(sFullScreen){
+        	setFullScreen(true);	
+        }else{
+    		setFullScreen(false);
+        }
+        //setFullScreen(sFullScreen);
         if (sScreenAutoRotate) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR);
         }
@@ -280,6 +302,7 @@ public class BaseActivity extends Activity implements ServiceConnection {
 
     public static void setFullScreenMode(final boolean mode) {
         sFullScreen = mode;
+        setFullScreenFlag = true;
         PerformOnUiThread.exec(new Runnable() {
             @Override public void run() {
                 if (sTopActivity != null) {
@@ -307,6 +330,7 @@ public class BaseActivity extends Activity implements ServiceConnection {
     }
 
     public void setFullScreen(boolean enable) {
+    	sFullScreen = enable;
         Window window = getWindow();
         if (enable) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);

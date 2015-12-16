@@ -305,6 +305,17 @@ namespace "config" do
       android_api_levels = AndroidTools.get_installed_api_levels
       android_api_levels.sort!
       $found_api_level = android_api_levels.last
+
+      #If user has mentioned version under android, then select that particular api level.
+      if $app_config["android"]["version"]
+        apilevel = AndroidTools.get_api_level $app_config["android"]["version"]
+        if(apilevel)
+          $androidplatform = AndroidTools.get_platform apilevel
+          $found_api_level = apilevel
+        else
+          puts "No Android platform found of version #{$app_config['android']['version']}. Picking the latest one Android #{AndroidTools.get_market_version $found_api_level} available in machine"
+        end
+      end
     end
 
 
@@ -394,13 +405,24 @@ namespace "config" do
 
     if !$skip_checking_Android_SDK
       if File.exist?(File.join($androidsdkpath, "build-tools"))
-        build_tools_path = []
+        build_tools = {}
         Dir.foreach(File.join($androidsdkpath, "build-tools")) do |entry|
           next if entry == '.' or entry == '..'
-          build_tools_path << entry
+
+          #Lets read source.properties file to get highest available build-tools
+          src_prop_path = File.join($androidsdkpath, "build-tools",entry,"source.properties")
+          next unless File.file?(src_prop_path)
+
+          File.open(src_prop_path) do |f|
+            f.each_line do |line|
+              build_tools[entry] = line.split('=')[1].gsub("\n",'') if line.match(/^Pkg.Revision=/)
+            end
+          end
+
         end
-        build_tools_path.sort!
-        build_tools_path = build_tools_path.last
+
+        latest_build_tools = build_tools.sort_by{|folder_name,sdk_version| sdk_version}.last
+        build_tools_path = latest_build_tools[0]
       end
 
       if build_tools_path

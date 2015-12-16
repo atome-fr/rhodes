@@ -60,9 +60,9 @@
 #endif
 
 IMPLEMENT_LOGCLASS(CMainWindow,"MainWindow");
-UINT WM_LICENSE_SCREEN = ::RegisterWindowMessage(L"RHODES_WM_LICENSE_SCREEN");
-
-UINT WM_INTENTMSG		   = ::RegisterWindowMessage(L"RHODES_WM_INTENTMSG");
+UINT WM_LICENSE_SCREEN		= ::RegisterWindowMessage(L"RHODES_WM_LICENSE_SCREEN");
+UINT WM_INTENTMSG			= ::RegisterWindowMessage(L"RHODES_WM_INTENTMSG");
+UINT WM_CREATE_SHORTCUT		= ::RegisterWindowMessage(L"RHODES_WM_CREATE_SHORTCUT");	
 
 #include "DateTimePicker.h"
 
@@ -72,6 +72,10 @@ extern "C" void rho_geoimpl_turngpsoff();
 extern "C" LRESULT rho_wmimpl_draw_splash_screen(HWND hWnd);
 
 extern "C" double rho_wmimpl_get_pagezoom();
+
+//Reads the "SplashScreenPath" & "SplashScreenDuration" value from config.xml
+extern "C" const wchar_t* rho_wmimpl_getSplashScreenPathVal();
+extern "C" const wchar_t* rho_wmimpl_getSplashScreenDuration();
 
 bool Rhodes_WM_ProcessBeforeNavigate(LPCTSTR url);
 bool m_SuspendedThroughPowerButton = false;
@@ -442,6 +446,10 @@ void CMainWindow::showWebView()
 
 LRESULT CMainWindow::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
 {
+#if defined(APP_BUILD_CAPABILITY_SHARED_RUNTIME)
+	RHODESAPP().getExtManager().OnQuittingTheApplication();
+#endif
+
 	rho_rhodesapp_callUiDestroyedCallback();
 
 #if defined (_WIN32_WCE)
@@ -460,7 +468,7 @@ LRESULT CMainWindow::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam
         delete m_pBrowserEng;
 
     m_pBrowserEng = NULL;
-
+	
     PostQuitMessage(0);
 
     bHandled = FALSE; // Allow ATL's default processing (e.g. NULLing m_hWnd)
@@ -726,7 +734,22 @@ LRESULT CMainWindow::OnWindowMinimized (UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM
 	}
 
 	m_isMinimized = true;
-
+	
+	//Title bar was seen when application was minimized at the top in WM device
+	if(RHO_IS_WMDEVICE)
+	{
+		INPUT ip; 
+		POINT pos;
+		GetCursorPos(&pos);
+		// Set up a generic mouse event.
+		ip.type = INPUT_MOUSE;
+		ip.mi.dx = pos.x;
+		ip.mi.dy = pos.y;
+		ip.mi.dwFlags = MOUSEEVENTF_RIGHTUP|MOUSEEVENTF_RIGHTDOWN;
+		ip.mi.time = 0;
+		SendInput(1, &ip, sizeof(INPUT));
+	}
+	
     return 0;
 }
 
@@ -1488,15 +1511,24 @@ LRESULT CMainWindow::OnExecuteCommand(UINT /*uMsg*/, WPARAM wParam, LPARAM lPara
 	}
 	return 0;
 }	
-
-
 LRESULT CMainWindow::OnLicenseWarning (UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM lParam, BOOL& /*bHandled*/)
 {
     ::MessageBoxW( m_hWnd, L"Please provide RhoElements license key.", L"Symbol License", MB_ICONERROR | MB_OK);
 
     return 0;
 }
-
+LRESULT CMainWindow::OnCreateShortcutViaXML(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM lParam, BOOL& /*bHandled*/)
+{
+	if(RHO_IS_WMDEVICE)
+	{
+		RHODESAPP().getExtManager().OnCreateShortcutViaXML(true);
+	}
+	else if(RHO_IS_CEDEVICE)
+	{
+		RHODESAPP().getExtManager().OnCreateShortcutViaXML(false);
+	}
+	return 0;
+}
 LRESULT CMainWindow::OnLicenseScreen(UINT /*uMsg*/, WPARAM wParam, LPARAM lParam, BOOL& /*bHandled*/)
 {
     LOG(INFO) + "OnLicenseScreen";
@@ -1863,17 +1895,17 @@ BOOL CMainWindow::TranslateAccelerator(MSG* pMsg)
     CWindow control = ::GetFocus();
 
 	// workaround for backspace key in text fields:
-	if (control.m_hWnd && (pMsg->message == WM_KEYUP) && (pMsg->wParam == VK_BACK))
-	{
-		if(RHO_IS_CEDEVICE)
-		{
-			control.SendMessage(WM_KEYDOWN, VK_BACK, 0);
-			control.SendMessage(WM_KEYUP, VK_BACK, 0);
-		}
-		else
-			control.SendMessage(WM_CHAR, VK_BACK, 1);
+	//if (control.m_hWnd && (pMsg->message == WM_KEYUP) && (pMsg->wParam == VK_BACK))
+	//{
+	//	if(RHO_IS_CEDEVICE)
+	//	{
+	//		control.SendMessage(WM_KEYDOWN, VK_BACK, 0);
+	//		control.SendMessage(WM_KEYUP, VK_BACK, 0);
+	//	}
+	//	else
+	//			control.SendMessage(WM_CHAR, VK_BACK, 1);
 		//return TRUE;
-	}
+	//}
 
     if (IsChild(control) && m_hWnd != control.GetParent())
     {
@@ -2117,15 +2149,46 @@ LRESULT CMainWindow::OnCustomToolbarItemCommand (WORD /*wNotifyCode*/, WORD  wID
 
 extern "C" LRESULT rho_wmimpl_draw_splash_screen(HWND hWnd)
 {
-  	CSplashScreen& splash = RHODESAPP().getSplashScreen();
+	//Commented this portion as we are not claiming support for Splash Screen Duration on WM/CE platform
+	//May be we can claim in future if required. As of now it will not be supported.
+  	//long lSplashScreenDuration = 0;  		
+	//convertFromStringW(rho_wmimpl_getSplashScreenDuration(),lSplashScreenDuration);
+	//CSplashScreen& splash = RHODESAPP().getSplashScreen();	
+	//if(lSplashScreenDuration != 0 ){
+	//	splash.setDuration(lSplashScreenDuration,TRUE);	
+	//}
+    CSplashScreen& splash = RHODESAPP().getSplashScreen();	
     splash.start();
 
     PAINTSTRUCT ps;
 	HDC hDC = BeginPaint(hWnd, &ps);
 
-    StringW pathW = convertToStringW(RHODESAPP().getLoadingPngPath());
+    StringW pathW;
+
+	LPCTSTR szSplashScreenPath = rho_wmimpl_getSplashScreenPathVal();
+	if (szSplashScreenPath)
+	{
+		pathW = szSplashScreenPath;
+		if (pathW.substr(0,7).compare(_T("file://"))==0)
+		{
+			pathW.erase(0,7);
+		}
+	}
+	else
+	{
+		pathW = convertToStringW(RHODESAPP().getLoadingPngPath());
+	}
 
 	HBITMAP hbitmap = SHLoadImageFile(pathW.c_str());
+
+	if(!hbitmap)
+	{
+		pathW.clear();
+		DeleteObject(hbitmap);
+		LOG(WARNING) + "Specified splashscreen image is not found or supported. Setting the default splashscreen image.";
+		pathW = convertToStringW(RHODESAPP().getLoadingPngPath());
+		hbitmap = SHLoadImageFile(pathW.c_str());
+	}
 		
 	if (hbitmap)
     {
@@ -2153,6 +2216,12 @@ extern "C" LRESULT rho_wmimpl_draw_splash_screen(HWND hWnd)
 	    StretchBlt(hDC, nLeft, nTop, nWidth, nHeight,
 		    hdcMem, 0, 0, bmp.bmWidth, bmp.bmHeight, SRCCOPY);
 	    //BitBlt(hDC, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), hdcMem, 0, 0, SRCCOPY);
+	    
+	    //Commented this portion as we donot want to show the splash screen for specified duration
+	    //In WM/CE device, with webkit engine, the splash screen remains for around 4 sec(minimum)
+	    //depending on all the dll's which are required for the browser to work normally.
+	    //Hence this portion of the code has been commented and not claiming support for splash screen duration.
+	    //splash.hide();
 
         SelectObject(hdcMem, resObj);
 	    DeleteObject(hbitmap);

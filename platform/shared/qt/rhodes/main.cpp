@@ -44,6 +44,8 @@
 #include <QMessageBox>
 #include <QDir>
 #include "impl/MainWindowImpl.h"
+#include "QtLogView.h"
+#include "../../platform/shared/qt/rhodes/RhoSimulator.h"
 
 using namespace rho;
 using namespace rho::common;
@@ -111,6 +113,8 @@ char* parseToken(const char* start)
 
 int main(int argc, char *argv[])
 {
+        QString OSDetailsString= QString("Running on : %1 Application Compiled with QT Version :  %2 Running with QT Version %3")
+    .arg(QtLogView::getOsDetails().toStdString().c_str(),QT_VERSION_STR,qVersion());
 #ifdef RHODES_EMULATOR
     bool isJSApp = false;
 #endif
@@ -133,14 +137,14 @@ int main(int argc, char *argv[])
                 m_strHttpProxy = proxy;
                 free(proxy);
             } else
-                RAWLOGC_INFO("Main", "invalid value for \"http_proxy_url\" cmd parameter");
+                RAWLOGC_INFO("QTMain", "invalid value for \"http_proxy_url\" cmd parameter");
         } else if (strncasecmp("-http_proxy_uri",argv[i],15)==0) {
             char *proxy = parseToken(argv[i]);
             if (proxy) {
                 m_strHttpProxy = proxy;
                 free(proxy);
             } else
-                RAWLOGC_INFO("Main", "invalid value for \"http_proxy_uri\" cmd parameter");
+                RAWLOGC_INFO("QTMain", "invalid value for \"http_proxy_uri\" cmd parameter");
 #ifdef RHODES_EMULATOR
         } else if ((strncasecmp("-approot",argv[i],8)==0) || (isJSApp = (strncasecmp("-jsapproot",argv[i],10)==0))) {
             char* path = parseToken(argv[i]);
@@ -168,7 +172,7 @@ int main(int argc, char *argv[])
             }
 #endif
         } else {
-            RAWLOGC_INFO1("Main", "wrong cmd parameter: %s", argv[i]);
+            RAWLOGC_INFO1("QTMain", "wrong cmd parameter: %s", argv[i]);
         }
     }
 
@@ -191,6 +195,7 @@ int main(int argc, char *argv[])
         RHOSIMCONF().setString("rhodes_path", m_strRhodesPath, false );
     RHOCONF().setString( "rhosim_platform", RHOSIMCONF().getString( "platform"), false);
     RHOCONF().setString( "app_version", RHOSIMCONF().getString( "app_version"), false);
+    RHOSIMCONF().setString("os_version",String(RHOSIMULATOR_VERSION),false);
     String start_path = RHOSIMCONF().getString("start_path");
     if ( start_path.length() > 0 )
         RHOCONF().setString("start_path", start_path, false);
@@ -204,12 +209,20 @@ int main(int argc, char *argv[])
     if ( !rho_rhodesapp_canstartapp(g_strCmdLine.c_str(), " /-,") )
     {
         QMessageBox::critical(0,QString("This is hidden app and can be started only with security key."), QString("Security Token Verification Failed"));
-        RAWLOGC_INFO("Main", "This is hidden app and can be started only with security key.");
+        RAWLOGC_INFO("QTMain", "This is hidden app and can be started only with security key.");
         if (RHOCONF().getString("invalid_security_token_start_path").length() <= 0)
             return 1;
     }
+    RAWLOGC_INFO("QTMain" ,OSDetailsString.toStdString().c_str());
+    //Identify QT is hardcoded path . hardcoded by compiler paths will be displayed.
+    for(int nCounter = 0; nCounter <QCoreApplication::libraryPaths().size(); nCounter ++)
+    {
+         QString path = QCoreApplication::libraryPaths().at(nCounter);
+         RAWLOGC_INFO1("QTMain", "%d Paths",nCounter);
+         RAWLOGC_INFO("QTMain", path.toStdString().c_str());
+    }
 
-    RAWLOGC_INFO("Main", "Rhodes started");
+    RAWLOGC_INFO("QTMain", "Rhodes started");
     if (m_strHttpProxy.length() > 0) {
         parseHttpProxyURI(m_strHttpProxy);
     } else {

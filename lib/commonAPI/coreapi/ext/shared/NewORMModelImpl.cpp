@@ -102,7 +102,7 @@ void rho::CNewORMModelImpl::init(const rho::String& modelName, rho::apiGenerator
 void rho::CNewORMModelImpl::destroy(rho::apiGenerator::CMethodResult& oResult)
 {
     LOG(INFO) + "Destroying Model: " + name_;
-    models_.remove(name_);
+    models_.erase(name_);
     name_ = "";
     id_ = "";
     modelProperties_.clear();
@@ -732,7 +732,7 @@ rho::String rho::CNewORMModelImpl::_make_order_str(const Vector<rho::String>& or
 rho::String rho::CNewORMModelImpl::_make_limit_str(const Hashtable<rho::String, rho::String>& options)
 {
     rho::String limit_str;
-    int limit = -1, offset = -1;
+    int limit = -1, offset = 0;
     Hashtable<rho::String, rho::String>::const_iterator cIt = options.find("per_page");
     if(cIt != options.end()) {
         rho::common::convertFromStringA(cIt -> second.c_str(), limit);
@@ -742,7 +742,7 @@ rho::String rho::CNewORMModelImpl::_make_limit_str(const Hashtable<rho::String, 
         rho::common::convertFromStringA(cIt -> second.c_str(), offset);
     }
 
-    if(limit > -1 && offset > -1)
+    if(limit > -1)
         limit_str = rho::String(" LIMIT " ) + rho::common::convertToStringA(limit) + " OFFSET " + rho::common::convertToStringA(offset);
     return limit_str;
 }
@@ -793,6 +793,17 @@ void rho::CNewORMModelImpl::buildFindOrder(const Vector<rho::String>& orderAttrs
     }
     oResult.set(retVals);
 }
+
+void rho::CNewORMModelImpl::buildFindOrderString(const Vector<rho::String>& orderAttrs,
+                    const Vector<rho::String>& orderOps,
+                    rho::apiGenerator::CMethodResult& oResult)
+{
+    buildFindOrder(orderAttrs, orderOps, oResult);
+    rho::Vector<rho::String> orderArr = oResult.getStringArray();
+    rho::String order_str = _make_order_str(orderArr);
+    oResult.set(order_str);
+}
+
 
 void rho::CNewORMModelImpl::buildSimpleWhereCond(const rho::String& what,
                           const rho::Vector<rho::String>& conditions,
@@ -1038,12 +1049,20 @@ void rho::CNewORMModelImpl::findObjectsPropertyBagByCondArray(const rho::String&
     rho::Vector<rho::String> questParams(quests);
     // count returns an integer
     rho::String strSQL;
+    
+    if(what.empty()) {
+        oResult.setArgError("findObjectsPropertyBagByCondArray: Invalid Empty First Argument passed.");
+        return;
+    }
+    
     if(what == "count")
     {
         strSQL = "SELECT COUNT(DISTINCT object)";
     }
+
     Hashtable<rho::String, rho::String> attrSet;
     _make_select_attrs_str(select_attr, attrSet);
+
     if(!where_str.size()) 
     {
         if(what != "all" && what != "first" && what != "count") {
@@ -1051,8 +1070,48 @@ void rho::CNewORMModelImpl::findObjectsPropertyBagByCondArray(const rho::String&
             questParams.clear();
             questParams.push_back(what);
         }
+
+        else if(what == "all" || what == "first"){
+            int limit = -1;
+            rho::String limit_str;
+
+            if(what == "all"){
+                limit_str = _make_limit_str(strOptions);
+            }
+            else if(what == "first"){
+                limit_str = rho::String(" LIMIT 1 OFFSET 0");
+            }
+
+            if(limit_str.size()){
+                rho::String sql = "SELECT distinct(object) FROM object_values WHERE source_id=";
+                sql += source_id;
+                sql += limit_str;
+
+                db::CDBAdapter& db = _get_db(oResult);
+                IDBResult res = db.executeSQL(sql.c_str());
+                if(!res.getDBError().isOK()) {
+                    oResult.setError(res.getDBError().getError());
+                    return;
+                }
+                // now , we got objects, time to retrive all attribs
+                Vector<Hashtable<rho::String, rho::String> > retVals;
+                Hashtable<rho::String, Hashtable<rho::String, rho::String> > obj_hashes;
+                for(; !res.isEnd(); res.next()) {
+                    Hashtable<rho::String, rho::String> objHash;
+                    rho::String objId = res.getStringByIdx(0);
+                    objHash["source_id"] = source_id;
+                    objHash["object"] = objId;
+                    _get_object_attrs(objId, objHash, attrSet, oResult);
+                    if(oResult.isError()) {
+                        return;
+                    }
+                    retVals.push_back(objHash);
+                }
+                oResult.set(retVals);
+                return;
+            }
+        }
         rho::String order_str = "";
-        rho::String limit_str = "";
         rho::String attrs_str = "object,attrib,value";
         if(!strSQL.size()) 
         {
@@ -1064,8 +1123,7 @@ void rho::CNewORMModelImpl::findObjectsPropertyBagByCondArray(const rho::String&
         strSQL += source_id;
         if(where_str.size())
             strSQL += rho::String(" AND ") + where_str;
-        if(limit_str.size())
-            strSQL += limit_str;
+
         db::CDBAdapter& db = _get_db(oResult);
         IDBResult res = db.executeSQLEx(strSQL.c_str(), questParams);
         _processDbResult(res, what, attrSet, false, oResult);
@@ -1074,8 +1132,20 @@ void rho::CNewORMModelImpl::findObjectsPropertyBagByCondArray(const rho::String&
     else 
     {
         rho::String limit_str = "";
+        rho::String order_str;
+        rho::String order_attr_sql;
+
+        Hashtable<rho::String, rho::String>::const_iterator cIt = strOptions.find("order");
+        if(cIt != strOptions.end())
+            order_str = cIt -> second;
+
+        limit_str = _make_limit_str(strOptions);
+
         if(what != "count") 
         {
+            if(what == "first")
+                limit_str = rho::String(" LIMIT 1 OFFSET 0");
+
             if(where_str.size())
                 strSQL = "SELECT * FROM (\n";
         }
@@ -1085,15 +1155,17 @@ void rho::CNewORMModelImpl::findObjectsPropertyBagByCondArray(const rho::String&
         }
         strSQL += "SELECT object";
 
-        for(size_t i = 0; i < select_attr.size(); ++i)
+        rho::Vector<rho::String> col_attrib = _get_attribs_of_PropertyBagModel(oResult);
+
+        for(size_t i = 0; i < col_attrib.size(); ++i)
         {
-            if(_is_reserved_name(select_attr[i]))
+            if(_is_reserved_name(col_attrib[i]))
                 continue;
             strSQL += ",\n";
             strSQL += "MAX(CASE WHEN attrib = '";
-            strSQL += select_attr[i];
+            strSQL += col_attrib[i];
             strSQL += "' THEN value ELSE NULL END) AS \'";
-            strSQL += select_attr[i];
+            strSQL += col_attrib[i];
             strSQL += "\'";
         }
         strSQL += " FROM object_values ov \n";
@@ -1103,8 +1175,12 @@ void rho::CNewORMModelImpl::findObjectsPropertyBagByCondArray(const rho::String&
         strSQL += "GROUP BY object\n";
         strSQL += ") WHERE ";
         strSQL += where_str;
+
+        if(order_str.size())
+            strSQL += order_str;
         if(limit_str.size())
             strSQL += limit_str;
+
         db::CDBAdapter& db = _get_db(oResult);
         IDBResult res = db.executeSQLEx(strSQL.c_str(), questParams);
         _processDbResult(res, what, attrSet, true, oResult);
@@ -1140,6 +1216,9 @@ void rho::CNewORMModelImpl::_processDbResult(IDBResult& res,
             Hashtable<rho::String, rho::String> obj_hash;
             for(int i = 0; i < ncols; ++i) {
                 if (res.getStringOrNil(i, datum)) {
+                    // include only the requested attributes
+                    if(attrSet.size() && !attrSet.containsKey(res.getColName(i)))
+                        continue;
                     obj_hash.put(res.getColName(i), datum);
                 }
             }
@@ -1633,6 +1712,14 @@ void rho::CNewORMModelImpl::onSyncUpdateError(const rho::String& objId,
         {
             const rho::String& attrName = cIt -> first;
             const rho::String& attrValue = cIt -> second;
+            Vector<rho::String> quests;
+            rho::String sqlScript = _make_insert_or_update_attr_sql_script(source_id, objId, attrName, attrValue, quests);
+            IDBResult res = db.executeSQLEx(sqlScript.c_str(), quests);
+            if(!res.getDBError().isOK()) {
+                oResult.setError(res.getDBError().getError());
+                db.rollback();
+                return;
+            }
         }
     }
     else
@@ -1999,6 +2086,30 @@ rho::String rho::CNewORMModelImpl::_strip_braces(const rho::String& str)
     if(retStr.size() && retStr[retStr.size() - 1] == '}')
         retStr = retStr.substr(0, retStr.size() - 1);
     return retStr;
+}
+
+rho::Vector<rho::String> rho::CNewORMModelImpl::_get_attribs_of_PropertyBagModel(rho::apiGenerator::CMethodResult& oResult)
+{
+    getProperty("source_id", oResult);
+    rho::String source_id = oResult.getString();
+
+    //Lets get all attrib as columns
+    rho::Vector<rho::String> col_attributes;
+    rho::String sql = "SELECT distinct(attrib) FROM object_values WHERE source_id=";
+    sql += source_id;
+
+    db::CDBAdapter& db = _get_db(oResult);
+    IDBResult res = db.executeSQL(sql.c_str());
+    if(!res.getDBError().isOK()) {
+        oResult.setError(res.getDBError().getError());
+        return col_attributes;
+    }
+
+    for(; !res.isEnd(); res.next()) {
+        col_attributes.push_back(res.getStringByIdx(0));
+    }
+
+    return col_attributes;
 }
 
 // static definitions

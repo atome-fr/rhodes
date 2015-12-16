@@ -69,7 +69,7 @@ namespace rho
 			//struct hostent *remoteHost;
 			//remoteHost = gethostbyaddr((char *)&(adr_inet.sin_addr), 4, AF_INET);
 			Platform::String^ host = rho::common::convertStringCToWP8(strtok (host_name, ":"));//remoteHost->h_name);
-			Platform::String^ port = rho::common::convertStringCToWP8(strtok (host_name, ":"));
+			Platform::String^ port = rho::common::convertStringCToWP8(strtok (NULL, ":"));
 
 			task<void>(Storage->m_sslSocket->ConnectAsync(ref new HostName(host), port, Sockets::SocketProtectionLevel::Ssl)).then([this, Storage, &retCode] (task<void> previousTask) {
 				try
@@ -183,7 +183,7 @@ namespace rho
 				}
 
 			}).wait();
-
+			reader->DetachStream();
 			*wouldblock = (retCode > 0) ? 0 : 1;
 
 			return retCode;

@@ -37,7 +37,9 @@ UINT WM_BROWSER_ONALERTPOPUP            = ::RegisterWindowMessage(L"WM_BROWSER_O
 UINT WM_BROWSER_ONAUTHENTICATIONREQUEST = ::RegisterWindowMessage(L"WM_BROWSER_ONAUTHENTICATIONREQUEST");
 
 //////////////////////////////////////////////////////////////////////////
-
+WNDPROC OldWndProc;
+BOOL isCancelButtonPressed=false;
+//////////////////////////////////////////////////////////////////////////
 CEBrowserEngine::CEBrowserEngine(HWND hwndParent, HINSTANCE hInstance)
     : m_ulRefs(0)
     , m_bInPlaceActive(true)
@@ -69,6 +71,7 @@ CEBrowserEngine::CEBrowserEngine(HWND hwndParent, HINSTANCE hInstance)
 
 	GetWindowRect(hwndParent, &m_rcViewSize);
     CreateEngine();
+	RHODESAPP().getExtManager().getEngineEventMngr().setEngineInterface(this);
 }
 
 CEBrowserEngine::~CEBrowserEngine(void)
@@ -475,7 +478,11 @@ HRESULT CEBrowserEngine::GetHostInfo( DOCHOSTUIINFO* pInfo )
     pInfo->dwFlags = DOCHOSTUIFLAG_NO3DBORDER;
 
 	if (!m_bTextSelectionEnabled)
-		pInfo->dwFlags |= DOCHOSTUIFLAG_DIALOG;
+	{
+		//Setting of pInfo->dwFlags to DOCHOSTUIFLAG_DIALOG
+		//has been commented as this restricts zoom button to work
+		//pInfo->dwFlags |= DOCHOSTUIFLAG_DIALOG;
+	}
 
 	pInfo->dwDoubleClick = DOCHOSTUIDBLCLK_DEFAULT;
 
@@ -520,6 +527,14 @@ HRESULT CEBrowserEngine::TranslateAccelerator(
 		}
 	}
 */
+	if (lpMsg && (lpMsg->message == WM_KEYDOWN))
+	{
+		if (lpMsg->wParam == VK_LEFT ||	lpMsg->wParam == VK_RIGHT || lpMsg->wParam == VK_UP || lpMsg->wParam == VK_DOWN || lpMsg->wParam == VK_RETURN)
+		{
+			//EMBPD00174595 - Prevent duplicate left, right, up, down & enter keys
+			return S_OK;
+		}
+	}
 	return S_FALSE;
 }
 
@@ -604,13 +619,17 @@ HRESULT CEBrowserEngine::Invoke(DISPID dispidMember,
 
 	switch (dispidMember) 
 	{
-	case DISPID_NAVIGATEERROR:
-        LOG(INFO) + "DISPID_NAVIGATEERROR";
-		m_bNavigationError=TRUE;
-		SetEvent(m_hNavigated);
-		CloseHandle(m_hNavigated);
-		m_hNavigated = NULL;
-
+		case DISPID_NAVIGATEERROR:
+        	LOG(INFO) + "DISPID_NAVIGATEERROR";
+        	if(!isCancelButtonPressed)
+		{
+			m_bNavigationError=TRUE;
+			SetEvent(m_hNavigated);
+			CloseHandle(m_hNavigated);
+			m_hNavigated = NULL;
+		}
+		else 
+			isCancelButtonPressed=false;
 		//get the URL which failed
 		if (pdparams && pdparams->rgvarg[0].vt == VT_BSTR)
 			wcsncpy(tcURL, pdparams->rgvarg[3].pvarVal->bstrVal, MAX_URL-1);
@@ -661,11 +680,24 @@ HRESULT CEBrowserEngine::Invoke(DISPID dispidMember,
         retVal = S_OK;
 
 		break;
+    case DISPID_PROGRESSCHANGE:
+        {
+            LOG(INFO) + "progress change";	
+            if (pdparams && pdparams->rgvarg[1].vt == VT_I4) 
+            { 
+                if(0 == pdparams->rgvarg[1].iVal)//if progress completed
+                {
+					ParseTags();//moved from doc complete as we won't get doc complete notification on page refresh.
+                    LOG(INFO) + "before calling dominjector ";
+                    RHODESAPP().getExtManager().getEngineEventMngr().injectDOMElements();
+                }
+            }
+            break;
+        }
 
 	case DISPID_DOCUMENTCOMPLETE:
 		//Validate that there is an event handler
-        LOG(INFO) + "DISPID_DOCUMENTCOMPLETE";
-
+		LOG(INFO) + "DISPID_DOCUMENTCOMPLETE";		
         SetEvent(m_hDocComp);
         CloseHandle(m_hDocComp);
         m_hDocComp = NULL;
@@ -684,8 +716,7 @@ HRESULT CEBrowserEngine::Invoke(DISPID dispidMember,
 		PostMessage(m_hwndParent, WM_BROWSER_ONDOCUMENTCOMPLETE, m_tabID, (LPARAM)_tcsdup(tcURL));
 
         m_bLoadingComplete = true;
-        InvalidateRect(GetHTMLWND(0), NULL, FALSE);
-        ParseTags();
+        InvalidateRect(GetHTMLWND(0), NULL, FALSE);       
 
 		retVal = S_OK;
         m_bNavigationComplete = TRUE;
@@ -720,9 +751,25 @@ HRESULT CEBrowserEngine::Invoke(DISPID dispidMember,
 		{
 				break;
 		}
+		
+		//EMBPD00163219- To Append "file://" in  URL
+		TCHAR strFile[MAX_URL];
+		memset(strFile, NULL, sizeof(TCHAR) * MAX_URL);
+		if(memcmp(tcURL, L"\\", 1) == 0)
+		{
+			wcscpy(strFile,L"file://");
+			wcscat(strFile,tcURL);
+			LOG(INFO) + "CEBrowserEngine tcURL "+tcURL;
+			LOG(INFO) + "CEBrowserEngine strFile "+strFile;
+
+		}
+		else
+		{
+			wcscpy(strFile,tcURL);
+		}
 
 		//  Test if the user has attempted to navigate back in the history
-		if (wcsicmp(tcURL, L"history:back") == 0)
+		if (wcsicmp(strFile, L"history:back") == 0)
 		{
             		m_pBrowser->GoBack();
         		 *(pdparams->rgvarg[0].pboolVal) = VARIANT_TRUE;
@@ -736,7 +783,7 @@ HRESULT CEBrowserEngine::Invoke(DISPID dispidMember,
 		// EMBPD00158491
 		m_bNavigationComplete = FALSE;
 		CloseHandle (CreateThread(NULL, 0, &CEBrowserEngine::NetworkWindowThread, (LPVOID)this, 0, NULL));
-		wcscpy(m_tcNavigatedURL, tcURL);
+		wcscpy(m_tcNavigatedURL, strFile);
 
 #ifdef SCROLL_NOTIFY
 		// Stop any checking for scroll changes during navigation
@@ -746,13 +793,13 @@ HRESULT CEBrowserEngine::Invoke(DISPID dispidMember,
 			pScrollNotify = NULL;
 		}
 #endif
-        PostMessage(m_hwndParent, WM_BROWSER_ONBEFORENAVIGATE, (WPARAM)m_tabID, (LPARAM)_tcsdup(tcURL));
+        PostMessage(m_hwndParent, WM_BROWSER_ONBEFORENAVIGATE, (WPARAM)m_tabID, (LPARAM)_tcsdup(strFile));
 
 		retVal = S_OK;
 		break;
 	}
 
-	//delete[] tcURL;
+	delete[] tcURL;
 	//tcURL = NULL;
 
 	return retVal;
@@ -878,13 +925,34 @@ LRESULT CEBrowserEngine::OnWebKitMessages(UINT uMsg, WPARAM wParam, LPARAM lPara
 void CEBrowserEngine::RunMessageLoop(CMainWindow& mainWnd) 
 {
 	MSG msg;
+	//This is used for checking the editable window focus. If the focus is lost on key down then we set the focus back to the screen
+	TCHAR getEditableWndClassName[MAX_PATH];
+	HWND getEditableFocusWnd = NULL;
+	
     while (GetMessage(&msg, NULL, 0, 0))
     {
+		// Used for Zoom-In Or Zoom-Out, if the return value is true then 
+		// the message will be pushed further so that the remaining action 
+		// on that function key can be processed.
+		// For Ex: After Zoom In or Zoom Out, the same key may be used by JavaScript
+		// or KeyCapture Module to perform other task from the html page.
+		if ( !RHODESAPP().getExtManager().onZoomTextWndMsg(msg) )
+            continue;
+
         if (RHODESAPP().getExtManager().onWndMsg(msg) )
             continue;
 
 		if (msg.message == WM_MOUSEFIRST)
 		{
+			//Get the details of the editable window, this will be used if the focus is lost on key down
+			getEditableFocusWnd = NULL;
+			ZeroMemory(getEditableWndClassName,MAX_PATH);
+			getEditableFocusWnd = GetFocus();
+			if(getEditableFocusWnd != NULL)
+			{
+				GetClassName(getEditableFocusWnd,getEditableWndClassName,MAX_PATH);
+			}
+			
 			bool m_bFullScreen = RHOCONF().getBool("full_screen");
 
 			if (m_bFullScreen)
@@ -894,8 +962,21 @@ void CEBrowserEngine::RunMessageLoop(CMainWindow& mainWnd)
 			}
 		}
 		
-		if (msg.message == WM_KEYDOWN && msg.wParam != VK_BACK)	//  Run Browser TranslateAccelerator
+		if ((msg.message == WM_KEYDOWN || msg.message == WM_KEYUP) && msg.wParam != VK_BACK)	//  Run Browser TranslateAccelerator
 		{
+			//Setting foucs back to the editable window if the focus is lost
+			if( _tcsicmp(getEditableWndClassName,TEXT("Internet Explorer_Server")) == 0 )
+			{
+				HWND checkFocusWnd = GetFocus();
+				if((getEditableFocusWnd != NULL) && (checkFocusWnd != NULL))
+				{
+					if((checkFocusWnd != getEditableFocusWnd) && (msg.message == WM_KEYDOWN))
+					{
+						SetFocus(getEditableFocusWnd);
+					}
+				}
+			}
+			
 			IDispatch* pDisp;
 			m_pBrowser->get_Document(&pDisp);
 			if (pDisp != NULL)
@@ -1297,7 +1378,19 @@ BOOL CEBrowserEngine::ZoomTextOnTab(int nZoom, UINT iTab)
 	return S_OK;
 }
 
+LRESULT CALLBACK NewWndProc (HWND hWnd, UINT msg,WPARAM wParam, LPARAM lParam)
+{
 
+        if(msg == WM_COMMAND)
+        {
+
+                if((LOWORD(wParam) == IDCANCEL) && (HIWORD(wParam) == BN_CLICKED) )
+                {
+			isCancelButtonPressed=true;
+                }
+        }
+        return CallWindowProc(OldWndProc, hWnd, msg, wParam, lParam); 
+}
 DWORD WINAPI CEBrowserEngine::NetworkWindowThread( LPVOID lpParameter )
 {
 
@@ -1315,6 +1408,7 @@ DWORD WINAPI CEBrowserEngine::NetworkWindowThread( LPVOID lpParameter )
 		HWND hCurrentWindow=FindWindow(TEXT("Dialog"),TEXT("Enter Network Password"));
 		if(hCurrentWindow != NULL)
 		{
+			OldWndProc = (WNDPROC)SetWindowLongPtr (hCurrentWindow,GWLP_WNDPROC, (LONG_PTR)NewWndProc);
 			GetWindowText(hCurrentWindow,szWindowText,MAX_PATH);
 			ZeroMemory(szWindowClass,MAX_PATH);
 			GetClassName(hCurrentWindow,szWindowClass,MAX_PATH);
@@ -1326,6 +1420,13 @@ DWORD WINAPI CEBrowserEngine::NetworkWindowThread( LPVOID lpParameter )
 		}
 	}
 	return 0;
+}
+bool CEBrowserEngine::executAnonymousJs(wchar_t* szFunctionText, int nTabID)
+{
+	bool bRetStatus = true;
+	InvokeJs(szFunctionText, nTabID);
+	//LOG(INFO) + szFunctionText;
+	return bRetStatus;
 }
 
 // EMBPD00158491 - [SAP-ITS][CE5/MK4000]-Sip is not shown while trying to enter text in fields of Authentication screen

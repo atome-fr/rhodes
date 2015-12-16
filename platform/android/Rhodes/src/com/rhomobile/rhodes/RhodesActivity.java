@@ -48,7 +48,9 @@ import android.app.Dialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.Uri;
@@ -61,6 +63,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.widget.FrameLayout;
 
@@ -70,19 +73,30 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
 	
 	private static final boolean DEBUG = false;
 	
+	public static boolean IS_WINDOWS_KEY = false;
+	
+	public static boolean isShownSplashScreenFirstTime = false;//Used to display the splash screen only once during launch of an application
+	
 	public static int MAX_PROGRESS = 10000;
 	
 	private static RhodesActivity sInstance = null;
 	
 	private Handler mHandler;
 	
+	private View mChild;
+	private int oldHeight;
+	private FrameLayout.LayoutParams frameLayoutParams;
+	
+	public static boolean IS_RESIZE_SIP = false;
+	
 	private FrameLayout mTopLayout;
 	private SplashScreen mSplashScreen;
 	private MainView mMainView;
-	
+	private String lastIntent ="android.intent.action.MAIN";
 	private RhoMenu mAppMenu;
 
 	private long uiThreadId = 0;
+	public static SharedPreferences pref = null;
 	
 	public static interface GestureListener {
 		void onTripleTap();
@@ -148,6 +162,18 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
                 configIs = getResources().openRawResource(RhoExtManager.getResourceId("raw", "config"));
                 config.load(configIs, externalSharedPath);
             }
+            
+             String isWindowKey = null;
+		try {
+		   isWindowKey = config.getValue("isWindowsKey");
+		} catch (Exception e) {
+		   e.printStackTrace();
+	        }
+            if (isWindowKey != null && isWindowKey.length() > 0){
+            	if(isWindowKey.contains("1")){
+            		IS_WINDOWS_KEY = true;
+            	}
+            }	
 
             String CAFile = config.getValue("CAFile");
             if (CAFile != null && CAFile.length() > 0)
@@ -167,7 +193,19 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
 		RhoConf.setString("PageZoom", pageZoom);
             else
             	RhoConf.setString("PageZoom", "1.0");
-            	
+            String sFullScreen = null;
+			try {
+				sFullScreen = config.getValue("FullScreen");
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+            if (sFullScreen != null && sFullScreen.length() > 0){
+            	if(sFullScreen.contains("1")){
+            		 RhoConf.setBoolean("full_screen", true);
+            	}else{
+            		 RhoConf.setBoolean("full_screen", false);
+            	}
+            }	
             	
             
             
@@ -203,7 +241,7 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
         uiThreadId = ct.getId();
 
         sInstance = this;
-
+        pref = sInstance.getApplicationContext().getSharedPreferences("RhodesSharedPreference", RhodesActivity.getContext().MODE_PRIVATE);
         super.onCreate(savedInstanceState);
 
         if ((RhoConf.isExist("android_title") && !RhoConf.getBool("android_title"))
@@ -225,17 +263,22 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
         SimpleMainView simpleMainView = new SimpleMainView();
         setMainView(simpleMainView);
         
-        Logger.T(TAG, "Creating splash screen");
-        
-        mSplashScreen = new SplashScreen(this, mMainView, this);
-        mMainView = mSplashScreen;
-        
         mAppMenu = new RhoMenu();
 
         readRhoElementsConfig();
         RhoExtManager.getImplementationInstance().onCreateActivity(this, getIntent());
 
         RhodesApplication.stateChanged(RhodesApplication.UiState.MainActivityCreated);
+        
+        if (RhoConf.isExist("resize_sip")) {
+			String resizeSIP = RhoConf.getString("resize_sip");
+			if (resizeSIP != null && resizeSIP.contains("1")) {
+				IS_RESIZE_SIP = true;
+				resizeSIP();
+			} else {
+				IS_RESIZE_SIP = false;
+			}
+	}
     }
 
     public MainView switchToSimpleMainView(MainView currentView) {
@@ -269,14 +312,33 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
 	}
 	
 	@Override
-    protected void onNewIntent(Intent intent) {
+     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
 
         Logger.T(TAG, "onNewIntent");
-
+         if(intent !=null && intent.getAction() !=null){
+        	 if(!(intent.getAction().compareTo("com.rho.rhoelements.SHORTCUT_ACTION") == 0) && ( intent.getAction().compareTo(lastIntent) == 0) && (RhoExtManager.getInstance().getWebView().getUrl()!=null/*..Double CLick Crash...*/)){
+	        	String url = RhoExtManager.getInstance().getWebView().getUrl().toString();
+	        	intent.setAction("android.intent.action.VIEW");
+	        	intent.setData(Uri.parse(url));
+        	 }else if((intent.getAction().compareTo("android.intent.action.MAIN") == 0) && (!(lastIntent.compareTo("com.rho.rhoelements.SHORTCUT_ACTION") == 0)) && (RhoExtManager.getInstance().getWebView().getUrl()!=null/*..Double CLick Crash...*/) ){
+	    	   //This Else for :- If user click on launch the EB through Shortcut and second time launch the EB through the proper
+	    	   //App that time for handle the Start page , we added this else.
+	    	    String url = RhoExtManager.getInstance().getWebView().getUrl().toString();
+	        	intent.setAction("android.intent.action.VIEW");
+	        	intent.setData(Uri.parse(url));
+	       }
+        }else{
+        	//This Else for :- If user Call Restore API that time to maintain the same Page when App resumed back
+        	//Because when user click on restore API that time our intent value is NULL.
+        	String url = RhoExtManager.getInstance().getWebView().getUrl().toString();
+        	intent.setAction("android.intent.action.VIEW");
+        	intent.setData(Uri.parse(url));
+        }
         handleStartParams(intent);
 
         RhoExtManager.getImplementationInstance().onNewIntent(this, intent);
+        lastIntent = intent.getAction();
     }
     
     @Override
@@ -312,6 +374,14 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
     @Override
     public void onResume() {
         Logger.T(TAG, "onResume");
+        
+        if(!isShownSplashScreenFirstTime){
+	        Logger.T(TAG, "Creating splash screen");
+	        mSplashScreen = new SplashScreen(this, mMainView, this);
+	        mMainView = mSplashScreen;
+	        isShownSplashScreenFirstTime = true;
+        }
+        
         mIsForeground = true;
         pauseWebViews(false);
         super.onResume();
@@ -635,5 +705,53 @@ public class RhodesActivity extends BaseActivity implements SplashScreen.SplashS
 		}
 	}
 
+        public static String getDecodeWav(){
+    	        String decodeWavPath = null;
+		decodeWavPath =pref.getString("scandecodewavkey", "");
+		pref.getString("scandecodewavkey", "");
+		return decodeWavPath;
+	}
+    
+        public static void setDecodeWav(String string){
+    	        pref.edit().putString("scandecodewavkey", string).commit();
+    }
+    
+    public void resizeSIP() {
+		FrameLayout mLayout = (FrameLayout) this
+				.findViewById(android.R.id.content);
+		if(mLayout != null && mLayout.getChildAt(0) != null) {
+			mChild = mLayout.getChildAt(0);
+			mChild.getViewTreeObserver().addOnGlobalLayoutListener(
+					new ViewTreeObserver.OnGlobalLayoutListener() {
+						public void onGlobalLayout() {
+							resizeChildOfContent();
+						}
+					});
+			frameLayoutParams = (FrameLayout.LayoutParams) mChild.getLayoutParams();
+		}
+	}
+
+	private void resizeChildOfContent() {
+		int newHeight = calculateUsedHeight();
+		if (newHeight != oldHeight && mChild != null && frameLayoutParams != null) {
+			int sipHeight = mChild.getRootView().getHeight();
+			int heightDiff = sipHeight - newHeight;
+			if (heightDiff > (sipHeight / 4)) {
+				// keyboard probably just became visible
+				frameLayoutParams.height = sipHeight - heightDiff;
+			} else {
+				// keyboard probably just became hidden
+				frameLayoutParams.height = sipHeight;
+			}
+			mChild.requestLayout();
+			oldHeight = newHeight;
+		}
+	}
+
+	private int calculateUsedHeight() {
+		Rect r = new Rect();
+		mChild.getWindowVisibleDisplayFrame(r);
+		return (r.bottom - r.top);
+	}
 
 }

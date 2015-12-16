@@ -53,7 +53,44 @@ public class CameraPreview implements SurfaceHolder.Callback {
             Logger.T(TAG, "No camera to stop preview");
         }
     }
+    
+	public static String getDeviceOrientation(int right,int bottom,int curentRotation )
+	{
 
+	Logger.I(TAG, "getDeviceOrientation right:- "+right);
+	Logger.I(TAG, "getDeviceOrientation bottom:- "+bottom);
+	Logger.I(TAG, "getDeviceOrientation curentRotation:- "+curentRotation);
+	String DeviceOrientation="undefined";
+	
+	if(right>bottom)
+	{	
+		if((curentRotation == 0)||(curentRotation == 2))
+		{	
+			Logger.I(TAG, "JDP getDeviceOrientation-1");
+			DeviceOrientation="LANDSCAPE";
+		}
+		else
+		{	
+			Logger.I(TAG, "JDP getDeviceOrientation-2");
+			DeviceOrientation="PORTRAIT";
+		}
+	}
+	else
+	{	
+		if((curentRotation == 0)||(curentRotation == 2))
+		{	
+			Logger.I(TAG, "JDP getDeviceOrientation-3");
+			DeviceOrientation="PORTRAIT";
+		}
+		else
+		{	
+			Logger.I(TAG, "JDP getDeviceOrientation-4");
+			DeviceOrientation="LANDSCAPE";
+		}
+	}
+	return DeviceOrientation;
+	
+	}
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
         Rect surfaceRect = holder.getSurfaceFrame();
@@ -69,40 +106,65 @@ public class CameraPreview implements SurfaceHolder.Callback {
         
         int rotation = ((Activity)mContext).getWindowManager().getDefaultDisplay().getRotation();
     	int degrees = 0;
-		switch (rotation) {
-		case Surface.ROTATION_0:
-			degrees = 90;
-			break;
-		case Surface.ROTATION_90:
-			degrees = 0;
-			break;
-		case Surface.ROTATION_180:
-			degrees = 270;
-			break;
-		case Surface.ROTATION_270:
-			degrees = 180;
-			break;
+    	String DeviceOriginalOrinetation=getDeviceOrientation(surfaceRect.right,surfaceRect.bottom,rotation);
+    	if(DeviceOriginalOrinetation=="LANDSCAPE")
+		{
+			switch (rotation) 
+			{
+				case Surface.ROTATION_0:
+					degrees = 0;
+					break;
+				case Surface.ROTATION_90:
+					degrees = 270;
+					break;
+				case Surface.ROTATION_180:
+					degrees = 180;
+					break;
+				case Surface.ROTATION_270:
+					degrees = 90;
+					break;
+			}
 		}
+    	else{
+			switch (rotation) {
+			case Surface.ROTATION_0:
+				degrees = 90;
+				break;
+			case Surface.ROTATION_90:
+				degrees = 0;
+				break;
+			case Surface.ROTATION_180:
+				degrees = 270;
+				break;
+			case Surface.ROTATION_270:
+				degrees = 180;
+				break;
+			}
+    	}
        mCamera.setDisplayOrientation(degrees);
        
         ISize size = mCamera.setPreviewSize(surfaceRect.right, surfaceRect.bottom);
         
         double previewRatio = (double) size.getWidth() / size.getHeight();
         double dR = previewRatio - (double) surfaceRect.right / surfaceRect.bottom;
-        int marginX = 0;
-        int marginY = 0;
+        int marginX = -4;
+        int marginY = -4;
         if (dR > 0) {
-            marginY = (int)(((double)surfaceRect.bottom - surfaceRect.right / previewRatio) / 2);
+            marginY = (int)(((double)surfaceRect.bottom - surfaceRect.right / previewRatio) / 4);
         } else if (dR < 1.0) {
-            marginX = (int)(((double)surfaceRect.right - surfaceRect.bottom * previewRatio) / 2);
+            marginX = (int)(((double)surfaceRect.right - surfaceRect.bottom * previewRatio) / 4);
         }
         
 
         FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams)mSurfaceView.getLayoutParams();
-        layoutParams.leftMargin = layoutParams.FILL_PARENT;
+        layoutParams.leftMargin = marginX;
+        layoutParams.rightMargin = marginX;
+        layoutParams.topMargin = marginY;
+        layoutParams.bottomMargin = marginY; 
+        /*layoutParams.leftMargin = layoutParams.FILL_PARENT;
         layoutParams.rightMargin = layoutParams.FILL_PARENT;
         layoutParams.topMargin = layoutParams.FILL_PARENT;
-        layoutParams.bottomMargin = layoutParams.FILL_PARENT;
+        layoutParams.bottomMargin = layoutParams.FILL_PARENT;*/
         mSurfaceView.setLayoutParams(layoutParams);
         mSurfaceView.requestLayout();
     }

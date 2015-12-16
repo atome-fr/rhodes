@@ -61,7 +61,9 @@ void CRhoTimer::addTimer(int nInterval, const char* szCallback, const char* szCa
     synchronized(m_mxAccess)
     {
       m_arItems.addElement(CTimerItem(nInterval, szCallback, szCallbackData));
+
       m_checkerThread.stopWait();
+
     }
 }
 
@@ -72,7 +74,9 @@ void CRhoTimer::addNativeTimer(int nInterval, CRhoTimer::ICallback* callback)
     synchronized(m_mxAccess)
     {
       m_arNativeItems.addElement(CNativeTimerItem(nInterval, callback));
+
       m_checkerThread.stopWait();
+
     }
 }
 

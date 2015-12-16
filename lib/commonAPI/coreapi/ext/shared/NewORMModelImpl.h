@@ -171,6 +171,9 @@ namespace rho {
         void buildFindOrder(const Vector<rho::String>& orderAttrs,
                             const Vector<rho::String>& orderOps,
                             rho::apiGenerator::CMethodResult& oResult);
+        void buildFindOrderString(const Vector<rho::String>& orderAttrs,
+                    const Vector<rho::String>& orderOps,
+                    rho::apiGenerator::CMethodResult& oResult);
         void buildSimpleWhereCond(const rho::String& what,
                                   const rho::Vector<rho::String>& conditions,
                                   rho::apiGenerator::CMethodResult& oResult);
@@ -241,6 +244,7 @@ namespace rho {
         static bool _is_reserved_name(const rho::String& attrName);
         static rho::String _strip_braces(const rho::String& str);
         static bool _is_non_str_func_where(const rho::String& val_func);
+        rho::Vector<rho::String> _get_attribs_of_PropertyBagModel(rho::apiGenerator::CMethodResult& oResult);
         
         static HashtablePtr<rho::String, CNewORMModelImpl*> models_;
         static Hashtable<rho::String, int> reserved_names_;

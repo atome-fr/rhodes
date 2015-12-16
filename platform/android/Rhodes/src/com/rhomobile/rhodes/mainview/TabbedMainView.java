@@ -42,6 +42,7 @@ import com.rhomobile.rhodes.file.RhoFileApi;
 import com.rhomobile.rhodes.util.ContextFactory;
 import com.rhomobile.rhodes.util.Utils;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -59,6 +60,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.ViewGroup.LayoutParams;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TabHost;
@@ -77,11 +79,13 @@ public class TabbedMainView implements MainView {
 	
 	private int mBackgroundColor = 0;
 	private boolean mBackgroundColorEnable = false;
-	
+	private boolean[] isTabLoaded;
+	private String[] tabDefaultUrl;
 	//private String mChangeTabCallback = null;
 	IMethodResult mChangeTabCallback = null;
 	
 	private boolean mIsReallyOnScreen = false;
+	
 	//private String mLoadUrlAfterLoadToScreen = null;
 	
 	//private static native void onTabBarChangeTabCallback(String callback_url, String body);
@@ -109,7 +113,7 @@ public class TabbedMainView implements MainView {
 		public String url;
 		public boolean reload;
 		public boolean loaded;
-		
+		public String title;
 		public int selected_color;
 		public boolean selected_color_enabled;
 		public boolean disabled;
@@ -118,6 +122,7 @@ public class TabbedMainView implements MainView {
 			loaded = false;
 			selected_color_enabled = false;
 			disabled = false;
+			title = null;
 		}
 	};
 	
@@ -524,9 +529,9 @@ public class TabbedMainView implements MainView {
 		Object[] tabs_array = tabs.toArray();
 		
 		int size = tabs_array.length;
-		
+		isTabLoaded = new boolean[size];
 		host = new TabHost(ctx, null);
-		
+		tabDefaultUrl = new String[size];
 		tabData = new Vector<TabData>(size);
 		tabIndex = 0;
 		
@@ -569,6 +574,7 @@ public class TabbedMainView implements MainView {
 
 		for (int i = 0; i < size; ++i) {
 			Object param = tabs_array[i];
+			isTabLoaded[i] = false;
 			if (!(param instanceof Map<?,?>))
 				throw new IllegalArgumentException("Hash expected");
 			
@@ -654,15 +660,16 @@ public class TabbedMainView implements MainView {
 				}
 				host.setBackgroundColor(web_bkg_color);
 			}
-			
+			tabDefaultUrl[i] = action;
 			TabData data = new TabData();
 			data.view = view;
 			data.url = action;
 			data.reload = reload;
-			
+			data.title = label;
 			if (use_current_view_for_tab) {
 				data.loaded = true;
 				tabIndex = i;
+				RhodesActivity.safeGetInstance().setTitle(data.title);
 			}
 			
 			data.selected_color = selected_color;
@@ -792,6 +799,8 @@ public class TabbedMainView implements MainView {
 						( (top <= y) && (y <= (top+height))) ) {
 					//Utils.platformLog("#$#$#$#$#$#$#$#$#$", "clicked item no "+String.valueOf(curIndex));
 					onTabChangedIndex(curIndex, true);
+					InputMethodManager imm = (InputMethodManager) RhodesActivity.getContext().getSystemService(Activity.INPUT_METHOD_SERVICE);
+					imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
 					return;
 				}
 			}
@@ -823,8 +832,8 @@ public class TabbedMainView implements MainView {
 			if (real_change) {
 				callChangeTabCallback(tabIndex);
 			}
-			
-			if ((data.reload /*|| real_change*/) || !data.loaded ) {
+			RhodesActivity.safeGetInstance().setTitle(data.title);
+			if (((data.reload /*|| real_change*/) || !data.loaded) && !isTabLoaded[tabIndex] ) {
 				if (mIsReallyOnScreen) {
 					RhodesService.loadUrl(data.url);
 					data.loaded = true;
@@ -991,6 +1000,8 @@ public class TabbedMainView implements MainView {
 
     @Override
     public IRhoWebView detachWebView() {
+    	//switch to main tab then detach web view
+    	switchTab(0);
         return getTabMainView(activeTab()).detachWebView();
     }
 
@@ -1020,6 +1031,10 @@ public class TabbedMainView implements MainView {
 	public void navigate(String url, int index) {
         if ( !isValidIndex(index) ) {
             return;
+        }
+        
+        if(index > -1) {
+        	isTabLoaded[index] = true;
         }
 
 		getTabMainView(index).navigate(url, 0);
@@ -1061,9 +1076,17 @@ public class TabbedMainView implements MainView {
 	public int activeTab() {
 		return tabIndex;
 	}
+	
+	public String getTabDefaultUrl() {
+		return getWebView(activeTab()).getUrl();
+		
+	}
 
 	public void goBack() {
-		getTabMainView(activeTab()).goBack();
+		if (activeTab() == 0
+				|| !getWebView(activeTab()).getUrl().contains(tabDefaultUrl[activeTab()])) {
+			getTabMainView(activeTab()).goBack();
+		}
 	}
 
 	public void loadData(String data, int index) {

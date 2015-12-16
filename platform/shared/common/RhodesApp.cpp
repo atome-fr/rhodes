@@ -840,7 +840,20 @@ void CRhodesApp::callBarcodeCallback(String strCallbackUrl, const String& strBar
 
     runCallbackInThread(strCallbackUrl, strBody);
 }
+//Due to the Multithreading issue callback was causing problem. That has been fixed in this.
+#if ( !defined(OS_MACOSX) && (defined(OS_WINDOWS_DESKTOP) ||  defined(RHODES_EMULATOR)))
+String g_strCallbackUrl;
+String g_strBody;
 
+	DWORD WINAPI CallbackExecThread( LPVOID lpParam ) 
+	{
+		 if ( !rho_ruby_is_started() )
+	            return 0;
+		 getNetRequest().pushData( g_strCallbackUrl, g_strBody, null );
+		 return 0;
+	}
+
+#endif
 void CRhodesApp::callCallbackWithData(String strCallbackUrl, String strBody, const String& strCallbackData, bool bWaitForResponse) 
 {
     strCallbackUrl = canonicalizeRhoUrl(strCallbackUrl);
@@ -857,10 +870,22 @@ void CRhodesApp::callCallbackWithData(String strCallbackUrl, String strBody, con
         strBody += strCallbackData;
     }
 
+#if ( !defined(OS_MACOSX) && (defined(OS_WINDOWS_DESKTOP) ||  defined(RHODES_EMULATOR)) )
+	g_strCallbackUrl = strCallbackUrl;
+	g_strBody = strBody;
+#endif
+
     if (bWaitForResponse)
         getNetRequest().pushData( strCallbackUrl, strBody, null );
     else
-        runCallbackInThread(strCallbackUrl, strBody);
+	{
+#if ( !defined(OS_MACOSX) && (defined(OS_WINDOWS_DESKTOP) ||  defined(RHODES_EMULATOR)) )
+		LOG(INFO) + strCallbackUrl + "in a Windows Specific Thread";
+		CloseHandle(::CreateThread(NULL,0,CallbackExecThread,NULL,0,NULL));
+#else
+		runCallbackInThread(strCallbackUrl, strBody);
+#endif
+	}
 }
 
 void CRhodesApp::callCallbackProcWithData(unsigned long oRubyCallbackProc, String strBody, const String& strCallbackData, bool bWaitForResponse) 
@@ -1870,6 +1895,10 @@ String CRhodesApp::getAppName()
 
 #if (defined(OS_WINDOWS_DESKTOP) || defined(OS_WINCE)) && !defined(RHODES_EMULATOR) && !defined(RHODES_QT_PLATFORM)
     strAppName = rho_native_get_appname();
+
+#elif(defined(RHODES_EMULATOR))
+        strAppName = RHOSIMCONF().getString("app_name");
+
 #else
     //TODO: Android - get app name for shared runtime app
     strAppName = RHOCONF().getString("app_name");
@@ -2374,7 +2403,7 @@ void CRhodesApp::setNetworkStatusMonitor( INetworkStatusMonitor* netMonitor )
         // UIDestroyed is called when app is terminating or going to background mode
         // UICreated is called only when app is created
         // Events should be sent in any case
-        //if (m_ui_state != newState)
+        if (m_ui_state != newState)
         {
             m_ui_state = newState;
             if (m_result.hasCallback())

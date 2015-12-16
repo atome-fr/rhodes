@@ -36,6 +36,7 @@ module AndroidTools
 def fill_api_levels(sdkpath)
     $api_levels = Hash.new
     $market_versions = Hash.new
+    $platforms = Hash.new
     max_apilevel = 0
     max_platform = nil
 
@@ -60,6 +61,7 @@ def fill_api_levels(sdkpath)
       if apilevel != 0
         $api_levels[marketversion] = apilevel
         $market_versions[apilevel] = marketversion
+        $platforms[apilevel] = File.basename platform
         if apilevel > max_apilevel
           max_apilevel = apilevel
           max_platform = File.basename platform
@@ -90,6 +92,11 @@ def get_api_level(marketversion)
     $api_levels[marketversion]
 end
 module_function :get_api_level
+
+def get_platform(apilevel)
+    $platforms[apilevel]
+end
+module_function :get_platform
 
 def get_addon_classpath(addon_pattern, apilevel = nil)
 
@@ -193,7 +200,6 @@ def get_addon_classpath(addon_pattern, apilevel = nil)
         next unless classpath
 
         found_classpath = classpath
-
         puts "classpath: #{found_classpath}, API level: #{found_apilevel}" if USE_TRACES
 
     end
@@ -439,7 +445,7 @@ def load_app_and_run(device_flag, apkfile, pkgname)
     end
 
     if theoutput.to_s.match(/INSTALL_PARSE_FAILED_INCONSISTENT_CERTIFICATES/)
-      raise "Inconsistent sertificates: please, uninstall application signed with another sertificate from #{device} first"
+      raise "Inconsistent certificates: please, uninstall application signed with another sertificate from #{device} first"
     end
     if theoutput.to_s.match(/INSTALL_FAILED_MISSING_SHARED_LIBRARY/)
       raise "Missing shared library: application is not compatible with #{device} due to lack of required libraries"

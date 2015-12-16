@@ -26,7 +26,7 @@ public class WebViewSingleton implements IWebViewSingleton, IRhoExtension {
     private static final String ENABLE_ZOOM = "enable_screen_zoom";
     private static final String ENABLE_WEB_PLUGINS = "enable_web_plugins";
     private static final String ENABLE_CACHE = "WebView.enableCache";
-    
+    private static final String DISABLE_SCANNER_NAVIGATION = "disable_scanner_during_navigation";
     private WebViewConfig mConfig = new WebViewConfig();
 
     public WebViewSingleton() {
@@ -414,6 +414,8 @@ public class WebViewSingleton implements IWebViewSingleton, IRhoExtension {
         if (config.isExist("enablezoom")) {
            // mConfig.set(WebViewConfig.ENABLE_ZOOM, config.getBool("enable_screen_zoom", WebViewConfig.ENABLE_ZOOM_DEF));
             mConfig.set(WebViewConfig.ENABLE_ZOOM, config.getBool("enablezoom"));
+        }else{
+        	 mConfig.set(WebViewConfig.ENABLE_ZOOM, true);
         }
         if (config.isExist("pagezoom")) {
             double zoomValue = config.getDouble("pagezoom");
@@ -431,6 +433,68 @@ public class WebViewSingleton implements IWebViewSingleton, IRhoExtension {
          
             mConfig.set(WebViewConfig.ENABLE_CACHE, cacheInt!=0);
         }
+        
+        if(config.isExist("splashscreenpath")){
+        	String splashscreenpathValue = config.getString("splashscreenpath");
+        	if(splashscreenpathValue != null){
+        		mConfig.set(WebViewConfig.SETTING_SPLASHSCREEN_PATH, splashscreenpathValue);
+        	}
+        }
+        
+        if(config.isExist("splashscreenduration")){
+        	String splashscreendurationValue = config.getString("splashscreenduration");
+        	if(splashscreendurationValue != null){
+        		mConfig.set(WebViewConfig.SETTING_SPLASHSCREEN_DURATION, splashscreendurationValue);
+        	}
+        }
+        if(config.isExist("http_proxy")){
+    		String httpProxy = config.getString("http_proxy");
+    		if(httpProxy.length()!=0){
+	    		int index = httpProxy.lastIndexOf(":");
+	    		if(index > -1)
+	    		{
+		    		String portNumber = httpProxy.substring(index + 1, httpProxy.length());
+		    		String hostURL = httpProxy.substring(0, index);
+		    		int port = Integer.parseInt(portNumber);
+		    		
+		    		ProxySettings.setProxy(RhodesActivity.getContext(),hostURL,port);
+		  		}
+	    	}
+    	}
+    	if(config.isExist("https_proxy")){
+    		String httpsProxy = config.getString("https_proxy");
+    		if(httpsProxy.length()!=0){
+	    		int index = httpsProxy.lastIndexOf(":");
+	    		if(index > -1)
+	    		{	      		
+	    			String portNumber = httpsProxy.substring(index + 1, httpsProxy.length());
+	    			String hostURL = httpsProxy.substring(0, index);
+	    			int port = Integer.parseInt(portNumber);
+	    		
+	    			ProxySettings.setProxy(RhodesActivity.getContext(),hostURL,port);
+	    		}
+	    	}
+    	}
+    	 if(config.isExist("username") && config.isExist("password") ){
+	        	String username = config.getString("username");
+				String password = config.getString("password");
+	        	if(username != null && password !=null){
+					if(username.length() > 0 && password.length()> 0){
+						mConfig.set(WebViewConfig.AUTH_USERNAME,username);
+						mConfig.set(WebViewConfig.AUTH_PASSWORD,password);
+					}
+				}
+			}
+			
+	if(config.isExist("disablescannerduringnavigation")){
+	        String disablescanner = config.getString("disablescannerduringnavigation");
+	        if(disablescanner != null){
+				if(disablescanner.length() > 0){
+						mConfig.set(WebViewConfig.DISABLE_SCANNER_ON_NAVIGATION,disablescanner);
+					}
+			}
+	}
+        
     }
     
     private void readRhoConfig(IRhoConfig config) {
@@ -446,6 +510,9 @@ public class WebViewSingleton implements IWebViewSingleton, IRhoExtension {
 
         if (RhoConf.isExist(ENABLE_CACHE))
             mConfig.set(WebViewConfig.ENABLE_CACHE, RhoConf.getBool(ENABLE_CACHE));
+            
+        if (RhoConf.isExist(DISABLE_SCANNER_NAVIGATION))
+            mConfig.set(WebViewConfig.DISABLE_SCANNER_ON_NAVIGATION, RhoConf.getString(DISABLE_SCANNER_NAVIGATION));
     }
 
 }
