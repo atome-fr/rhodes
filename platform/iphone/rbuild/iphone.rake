@@ -578,6 +578,7 @@ def kill_iphone_simulator
   `killall -9 iphonesim_43`
   `killall -9 iphonesim_51`
   `killall -9 iphonesim_6`
+  `killall -9 iphonesim_7`
 end
 
 namespace "config" do
@@ -640,6 +641,9 @@ namespace "config" do
     if xcode_version[0].to_i >= 6
       $iphonesim = File.join($startdir, 'res/build-tools/iphonesim/build/Release/iphonesim_6')
     end
+    if xcode_version[0].to_i >= 7
+      $iphonesim = File.join($startdir, 'res/build-tools/iphonesim/build/Release/iphonesim_7')
+    end
 
 
     $xcodebuild = $devroot + "/usr/bin/xcodebuild"
@@ -652,7 +656,9 @@ namespace "config" do
       if !File.exists? '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/PrivateFrameworks/DVTiPhoneSimulatorRemoteClient.framework'
         #check for XCode 6
         xcode_version = get_xcode_version
-        if xcode_version[0].to_i >= 6
+        if xcode_version[0].to_i >= 7
+          $iphonesim = File.join($startdir, 'res/build-tools/iphonesim/build/Release/iphonesim_7')
+        elsif xcode_version[0].to_i >= 6
           $iphonesim = File.join($startdir, 'res/build-tools/iphonesim/build/Release/iphonesim_6')
         else
           $iphonesim = File.join($startdir, 'res/build-tools/iphonesim/build/Release/iphonesim_43')
@@ -1752,6 +1758,15 @@ namespace "build" do
           end
         end
 
+        #LSApplicationQueriesSchemes
+        if $app_config["iphone"].has_key?("ApplicationQueriesSchemes")
+          arr_app_queries_schemes = $app_config["iphone"]["ApplicationQueriesSchemes"]
+          if arr_app_queries_schemes.kind_of?(Array)
+            hash['LSApplicationQueriesSchemes'] = arr_app_queries_schemes
+          else
+            hash['LSApplicationQueriesSchemes'] = []
+          end
+        end
 
          set_app_icon(false)
          set_default_images(false, hash)
@@ -1832,6 +1847,16 @@ namespace "build" do
           if hash['NSLocationWhenInUseUsageDescription'] == nil
             puts "Info.plist: added key [NSLocationWhenInUseUsageDescription]"
             hash['NSLocationWhenInUseUsageDescription'] = gps_request_text
+          end
+        end
+
+        #LSApplicationQueriesSchemes
+        if $app_config["iphone"].has_key?("ApplicationQueriesSchemes")
+          arr_app_queries_schemes = $app_config["iphone"]["ApplicationQueriesSchemes"]
+          if arr_app_queries_schemes.kind_of?(Array)
+            hash['LSApplicationQueriesSchemes'] = arr_app_queries_schemes
+          else
+            hash['LSApplicationQueriesSchemes'] = []
           end
         end
 
@@ -2850,7 +2875,7 @@ namespace "device" do
       print_timestamp('device:iphone:production FINISH')
       puts '************************************'
       puts '*'
-      puts "SUCCESS ! Production package builded and placed into : "+ipapath
+      puts "SUCCESS ! Production package built and placed into : "+ipapath
       puts '*'
       puts '************************************'
     end

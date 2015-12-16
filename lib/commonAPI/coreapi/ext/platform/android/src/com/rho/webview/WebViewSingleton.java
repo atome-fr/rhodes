@@ -494,6 +494,23 @@ public class WebViewSingleton implements IWebViewSingleton, IRhoExtension {
 					}
 			}
 	}
+	if(config.isExist("iswindowskey")){
+	        String iswinkey = config.getString("iswindowskey");
+	        if(iswinkey != null){
+				if(iswinkey.length() > 0){
+						mConfig.set("iswindowskey",iswinkey);
+					}
+			}
+	}
+	
+	if(config.isExist("usedwforscanning")){
+	        String _usedwforscanning = config.getString("usedwforscanning");
+	        if(_usedwforscanning != null){
+				if(_usedwforscanning.length() > 0){
+						mConfig.set("usedwforscanning",_usedwforscanning);
+					}
+			}
+	}
         
     }
     
@@ -513,6 +530,8 @@ public class WebViewSingleton implements IWebViewSingleton, IRhoExtension {
             
         if (RhoConf.isExist(DISABLE_SCANNER_NAVIGATION))
             mConfig.set(WebViewConfig.DISABLE_SCANNER_ON_NAVIGATION, RhoConf.getString(DISABLE_SCANNER_NAVIGATION));
+        if (RhoConf.isExist("iswindowskey"))
+            mConfig.set("iswindowskey", RhoConf.getString("iswindowskey"));      
     }
 
 }

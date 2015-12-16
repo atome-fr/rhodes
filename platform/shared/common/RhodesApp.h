@@ -112,6 +112,7 @@ namespace common {
         virtual bool onReinstallConfigUpdate(const HashtablePtr<String,Vector<String>* >& conflicts) = 0;
         virtual bool onMigrateSource() = 0;
         virtual bool onDeviceScreenEvent(const int newState) = 0;
+
     };
     
     class ApplicationEventReceiver : public IApplicationEventReceiver
@@ -132,6 +133,7 @@ namespace common {
         
         virtual bool isCallbackSet();
         virtual void setCallback(apiGenerator::CMethodResult& oResult);
+
     };
 
 class CRhodesApp : public CRhodesAppBase

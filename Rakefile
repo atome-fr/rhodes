@@ -143,7 +143,7 @@ namespace "framework" do
   end
 end
 
-$application_build_configs_keys = ['security_token', 'encrypt_database', 'android_title', 'iphone_db_in_approot', 'iphone_set_approot', 'iphone_userpath_in_approot', "iphone_use_new_ios7_status_bar_style", "iphone_full_screen", "webkit_outprocess", "webengine"]
+$application_build_configs_keys = ['security_token', 'encrypt_database', 'android_title', 'iphone_db_in_approot', 'iphone_set_approot', 'iphone_userpath_in_approot', "iphone_use_new_ios7_status_bar_style", "iphone_full_screen", "webkit_outprocess", "webengine", "create_eb_js"]
 
 $winxpe_build = false
 
@@ -2774,11 +2774,13 @@ namespace "config" do
       end
 
       application_build_configs['shared-runtime'] = '1' if $app_config["capabilities"].index('shared_runtime')
+	  application_build_configs['symbol'] = '1' if $app_config["capabilities"].index('symbol') && $current_platform == 'wm'
 
       if $app_config["extensions"].index("webkit-browser")
         $app_config["capabilities"] += ["webkit_browser"]
         $app_config["extensions"].delete("webkit-browser")
       end
+	  application_build_configs['webkit_browser'] = '1' if $app_config["capabilities"].index('webkit_browser') && $current_platform == 'wm'
 
       if  $app_config["capabilities"].index("webkit_browser") || ($app_config["capabilities"].index("symbol") && $current_platform != "android")
         #contains wm and android libs for webkit browser
@@ -2798,6 +2800,7 @@ namespace "config" do
       end
 
       if $current_platform == "wm"
+		$app_config['extensions'] = $app_config['extensions'] | ['sharedruntimecheck']
         $app_config['extensions'] = $app_config['extensions'] | ['symboldevice']
         $app_config['extensions'] = $app_config['extensions'] | ['barcode']
         $app_config['extensions'] = $app_config['extensions'] | ['indicators']
@@ -3527,7 +3530,9 @@ def init_extensions(dest, mode = "")
         write_modules_js(rhoapi_js_folder, "rhoapi-modules.js", extjsmodulefiles, do_separate_js_modules)
 
         $ebfiles_shared_rt_js_appliction = ($js_application and ($current_platform == "wm" or $current_platform == "android") and $app_config["capabilities"].index('shared_runtime'))
-        if $use_shared_runtime || $ebfiles_shared_rt_js_appliction
+        $check_eb_js_enabled = Jake.getBuildBoolProp("create_eb_js")
+        $is_eb_js_creation_req = ($check_eb_js_enabled and $use_shared_runtime)
+        if $is_eb_js_creation_req || $ebfiles_shared_rt_js_appliction
           start_path = Dir.pwd
           chdir rhoapi_js_folder
 
