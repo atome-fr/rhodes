@@ -133,5 +133,7 @@
      <dict>  
           <key>NSAllowsArbitraryLoads</key><true/>  
      </dict>
+     <key>UIRequiresFullScreen</key>
+     <true/>
 </dict>
 </plist>
