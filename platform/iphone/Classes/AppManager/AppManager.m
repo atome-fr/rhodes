@@ -438,7 +438,6 @@ BOOL isPathIsSymLink(NSFileManager *fileManager, NSString* path) {
         
         UIDocumentInteractionController* docController = [UIDocumentInteractionController interactionControllerWithURL:fileURL];
         
-        [docController retain];
         docController.delegate = self;//[AppManager instance];
         
         BOOL result = [docController presentPreviewAnimated:YES];
@@ -487,16 +486,6 @@ BOOL isPathIsSymLink(NSFileManager *fileManager, NSString* path) {
         [[AppManager instance] openDocInteract:strUrl];
     }
     else {
-#ifdef __IPHONE_8_0
-        if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"9.0")) {
-            if ([strUrl rangeOfString:@":"].location == NSNotFound) {
-                //Append : for backward compatibility
-                strUrl = [strUrl stringByAppendingString:@":"];
-            } else {
-                //Do nothing
-            }
-        }
-#endif
         if ([[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:strUrl]]) {
             res = [[UIApplication sharedApplication] openURL:[NSURL URLWithString:strUrl]];
         }
@@ -756,7 +745,6 @@ static const double RHO_IPHONE_PPI = 163.0;
 static const double RHO_IPHONE4_PPI = 326.0;
 // http://www.apple.com/ipad/specs/
 static const double RHO_IPAD_PPI = 132.0;
-static const double RHO_IPAD_MINI_PPI = 163.0;
 static const double RHO_NEW_IPAD_PPI = 264.0;
 
 static float get_scale() {
@@ -826,9 +814,7 @@ int rho_sysimpl_get_property_iphone(char* szPropName, NSObject** resValue)
     }
     else if (strcasecmp("ppi_x", szPropName) == 0 ||
              strcasecmp("ppi_y", szPropName) == 0) {
-
 #ifdef __IPHONE_3_2
-
         if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
             if (get_scale() > 1.2) {
                 *resValue = [NSNumber numberWithDouble:RHO_NEW_IPAD_PPI];
