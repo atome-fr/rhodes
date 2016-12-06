@@ -15,7 +15,7 @@ cd ../..
 RHO_BUNDLE_ALREADY_BUILDED="NO"
 rake switch_app
 TARGET_RHODESLIBS_DIR=${SRCROOT}
-cd <%= rhodes_root_path %>
+# cd <%= rhodes_root_path %>
 rake build:iphone:rhobundle
 
 RHO_BUNDLE_ALREADY_BUILDED="NO"
