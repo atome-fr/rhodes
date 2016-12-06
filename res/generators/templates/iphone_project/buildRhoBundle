@@ -27,7 +27,7 @@ echo "FINISH Prepare build bundle - switch app"
 
 TARGET_RHODESLIBS_DIR=${SRCROOT}
 
-cd <%= rhodes_root_path %>
+# cd <%= rhodes_root_path %>
 
 echo "START build bundle ..."
 
