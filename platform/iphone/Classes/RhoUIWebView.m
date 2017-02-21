@@ -65,6 +65,7 @@
         }
     }
     
+    w.allowsInlineMediaPlayback = YES;
     w.userInteractionEnabled = YES;
     w.multipleTouchEnabled = YES;
     w.clipsToBounds = NO;

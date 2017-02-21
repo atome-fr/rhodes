@@ -47,6 +47,8 @@
     if ( rho_conf_getBool("enable_media_playback_without_gesture") == 1 )
         configuration.mediaPlaybackRequiresUserAction = NO;
     
+    configuration.allowsInlineMediaPlayback = YES;
+    
     WKWebView* w = [[WKWebView alloc] initWithFrame:frame configuration:configuration];
     //w.scalesPageToFit = YES;
     if ( !rho_conf_getBool("WebView.enableBounce") )
