@@ -49,6 +49,7 @@
     if ( rho_conf_getBool("enable_media_playback_without_gesture") == 1 )
         w.mediaPlaybackRequiresUserAction = NO;
     
+    w.allowsInlineMediaPlayback = YES;
     w.userInteractionEnabled = YES;
     w.multipleTouchEnabled = YES;
     w.clipsToBounds = NO;
