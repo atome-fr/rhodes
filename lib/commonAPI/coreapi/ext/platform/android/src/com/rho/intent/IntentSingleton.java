@@ -11,6 +11,7 @@ import java.util.Set;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.content.ClipData;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -246,8 +247,17 @@ public class IntentSingleton extends AbstractRhoListener implements IIntentSingl
             if (extras != null) {
                 params.put(HK_DATA, extras);
             }
-        }
-        
+            
+            ClipData clipData = intent.getClipData();
+            if (clipData != null) {
+                List<String> itemList;
+                itemList=new ArrayList();
+                for(int i = 0; i < clipData.getItemCount(); i++){
+                    itemList.add(clipData.getItemAt(i).getUri().toString());
+                }
+                params.put("clipData", itemList);
+            }
+            
         return params;
     }
     
@@ -388,6 +398,7 @@ public class IntentSingleton extends AbstractRhoListener implements IIntentSingl
             params.put(HK_INTENT_TYPE, START_ACTIVITY);
             params.put(HK_RESPONSE_CODE, Integer.valueOf(resCode));
             result.set(params);
+
         }
     }
 
