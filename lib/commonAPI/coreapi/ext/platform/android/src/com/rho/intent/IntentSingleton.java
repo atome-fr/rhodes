@@ -257,7 +257,8 @@ public class IntentSingleton extends AbstractRhoListener implements IIntentSingl
                 }
                 params.put("clipData", itemList);
             }
-            
+        }
+        
         return params;
     }
     
