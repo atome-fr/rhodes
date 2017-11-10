@@ -82,30 +82,35 @@ public class LocalFileHandler implements UriHandler
         }
         intentFlags=Intent.FLAG_GRANT_READ_URI_PERMISSION;
         Intent intent = Intent.parseUri(url, intentFlags);
+        intent.setAction(Intent.ACTION_VIEW);
+
         if(newUri==null && url.contains("file://"))
-       {
-    	   intent.setAction(Intent.ACTION_VIEW);
+       {    	   
     	    try{
         	   String extension = MimeTypeMap.getFileExtensionFromUrl(url);
-        	   String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        	   String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.toLowerCase());
         	    if(mimeType!=null && mimeType.contains("image"))
         	    	intent.setDataAndType(path, "image/*");
         	    else if(mimeType!=null && mimeType.contains("audio"))
         	    	intent.setDataAndType(path, "audio/*");
 				else if(mimeType!=null && mimeType.contains("video"))
         	    	intent.setDataAndType(path, "video/*");	
-        	    else
+        	    else if(mimeType!=null) {
+                    intent.setDataAndType(path, mimeType); 
+                } else {
         	    	intent.setDataAndType(path, "*/*");
+                }
         	   }
         	   catch(Exception ex)
         	   {
         		   Logger.E(TAG, ex.getMessage());
         		   intent.setDataAndType(path, "*/*");
         	   }
-    	   
+               
     	
    	   }
-        ctx.startActivity(Intent.createChooser(intent, "Open in..."));
+        //ctx.startActivity(Intent.createChooser(intent, "Open in..."));
+       ctx.startActivity(intent);
 
         return true;
     }

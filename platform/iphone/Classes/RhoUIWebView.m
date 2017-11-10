@@ -50,6 +50,11 @@
         w.mediaPlaybackRequiresUserAction = NO;
     
     w.allowsInlineMediaPlayback = YES;
+
+    if (rho_conf_is_property_exists("WebView.keyboardDisplayRequiresUserAction")) {
+        int v = rho_conf_getBool("WebView.keyboardDisplayRequiresUserAction");
+        w.keyboardDisplayRequiresUserAction = (v != 0);
+    }
     w.userInteractionEnabled = YES;
     w.multipleTouchEnabled = YES;
     w.clipsToBounds = NO;

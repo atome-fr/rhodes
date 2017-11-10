@@ -323,6 +323,12 @@ namespace "config" do
     $min_sdk_level = $min_sdk_level.to_i unless $min_sdk_level.nil?
     $min_sdk_level = ANDROID_SDK_LEVEL if $min_sdk_level.nil?
 
+
+    $target_sdk_level = $app_config["android"]["targetSDK"] unless $app_config["android"].nil?
+    $target_sdk_level = $config["android"]["targetSDK"] if $target_sdk_level.nil? and not $config["android"].nil?
+    $target_sdk_level = $target_sdk_level.to_i unless $target_sdk_level.nil?
+    $target_sdk_level = (($min_sdk_level > 14) ? $min_sdk_level : 14) if $target_sdk_level.nil?
+
     $max_sdk_level = $app_config["android"]["maxSDK"] unless $app_config["android"].nil?
 
     if !$skip_checking_Android_SDK
@@ -505,7 +511,6 @@ namespace "config" do
       )
 
       $androidjar = File.join($androidsdkpath, "platforms", $androidplatform, "android.jar")
-      $sdklibjar = File.join($androidsdkpath, 'tools', 'lib', 'sdklib.jar')
 
       $keytool = File.join($java, "keytool" + $exe_ext)
       $jarsigner = File.join($java, "jarsigner" + $exe_ext)
@@ -528,6 +533,14 @@ namespace "config" do
       $storealias = $config["android"]["production"]["alias"] if $storealias.nil? and !$config["android"].nil? and !$config["android"]["production"].nil?
       $storealias = "rhomobile.keystore" if $storealias.nil?
 
+      $build_tools_ver = File.split( build_tools_path )[1]
+
+      AndroidTools.logger = $logger
+      AndroidTools.jarsigner = $jarsigner
+      AndroidTools.zipalign = $zipalign
+      AndroidTools.keytool = $keytool
+
+      $sdklibjar = AndroidTools.findSdkLibJar $androidsdkpath
     end
 
     $app_config["capabilities"] += ANDROID_CAPS_ALWAYS_ENABLED
@@ -578,7 +591,17 @@ namespace "config" do
         $google_classpath = AndroidTools::get_addon_classpath('Google APIs', $found_api_level)
       end
 
-      AndroidTools::MavenDepsExtractor.instance.add_dependency('com.android.support:support-v4:23.0.0')
+      HAVE_V4_SUPPORT = false
+      $app_config["extensions"].each do |extname|
+        if extname == "fcm-push"
+          HAVE_V4_SUPPORT = true
+        end
+      end
+
+      if !HAVE_V4_SUPPORT
+        AndroidTools::MavenDepsExtractor.instance.add_dependency('com.android.support:support-v4:25.2.0')
+      end
+      #TODO: needs to check the lastest version of support-v4
 
       #setup_ndk($androidndkpath, $found_api_level, 'arm')
       $abis = $app_config['android']['abis'] if $app_config["android"]
@@ -619,7 +642,7 @@ namespace "config" do
       apilevel = nil
       target_name = nil
 
-      `"#{$androidbin}" list targets`.split(/\n/).each do |line|
+      `"#{$androidbin}" list target`.split(/\n/).each do |line|
         line.chomp!
 
         if line =~ /^id:\s+([0-9]+)\s+or\s+\"(.*)\"/
@@ -675,7 +698,7 @@ namespace "config" do
     # just after build config has been read and before processing extensions
     task :app_config do
       if $app_config['capabilities'].index('push')
-        $app_config['extensions'] << 'gcm-push' unless $app_config['extensions'].index('gcm-push')
+        $app_config['extensions'] << 'gcm-push' unless $app_config['extensions'].index('gcm-push') || $app_config['extensions'].index('fcm-push')
       end
 
       if !$app_config['android'].nil? && !$app_config['android']['abis'].nil? && ($app_config['android']['abis'].index('x86') || $app_config['android']['abis'].index('mips'))
@@ -1008,6 +1031,8 @@ namespace "build" do
       ENV["NEON_ROOT"] = $neon_root unless $neon_root.nil?
       ENV["CONFIG_XML"] = $config_xml unless $config_xml.nil?
       ENV["RHO_DEBUG"] = $debug.to_s
+      ENV["CUSTOM_FCM_SENDER_ID"] = $app_config["android"]["fcmSenderID"] unless $app_config["android"].nil?
+      ENV["CUSTOM_FCM_APPLICATION_ID"] = $app_config["android"]["fcmAppID"] unless $app_config["android"].nil?
 
       $ext_android_build_scripts.each do |ext, builddata|
         
@@ -1662,6 +1687,7 @@ namespace "build" do
       generator.versionCode = version
       generator.installLocation = 'auto'
       generator.minSdkVer = $min_sdk_level
+      generator.targetSdkVer = $target_sdk_level
       generator.maxSdkVer = $max_sdk_level
       generator.screenOrientation = $android_orientation unless $android_orientation.nil?
       generator.hardwareAcceleration = true if $app_config["capabilities"].index('hardware_acceleration')
@@ -1871,13 +1897,17 @@ namespace "build" do
       f = StringIO.new("", "w+")
       #File.open($app_native_libs_java, "w") do |f|
       f.puts "package #{JAVA_PACKAGE_NAME};"
+      f.puts "import android.util.Log;"
       f.puts "public class NativeLibraries {"
+      f.puts "  private static final String TAG = NativeLibraries.class.getSimpleName();"
       f.puts "  public static void load() {"
       f.puts "    // Load native .so libraries"
       Dir.glob($app_builddir + "/**/lib*.so").reverse.each do |lib|
         next if lib =~ /noautoload/
         libname = File.basename(lib).gsub(/^lib/, '').gsub(/\.so$/, '')
+        f.puts "    Log.d(TAG, \"Loading lib #{libname}\");"
         f.puts "    System.loadLibrary(\"#{libname}\");"
+        f.puts "    Log.d(TAG, \"Lib #{libname} loaded\");"
       end
       #f.puts "    // Load native implementation of rhodes"
       #f.puts "    System.loadLibrary(\"rhodes\");"
@@ -2242,16 +2272,67 @@ namespace "package" do
     require 'set'
     unique_jars = Set.new
 
+    useProguard = false;
+    useProguard = $app_config["android"]["useproguard"] == "true" ? true : false if $app_config["android"]
+    proguardUserRules = $app_config["android"]["proguardrules"] if $app_config["android"]
+
+    proguardDir = File.join($startdir, "platform", "android", "proguard")
+    rm_rf File.join($tmpdir, "proguard") if File.exists? File.join($tmpdir, "proguard")
+    cp_r proguardDir, $tmpdir
+    proguardDir = File.join($tmpdir, "proguard")
+    proguardTempJarDir = File.join(proguardDir, "TempJars")
+    proguardPreBuild = File.join(proguardTempJarDir, "preguard")
+    proguardPostBuild = File.join(proguardTempJarDir, "postguard")
+    proguardRules = File.join(proguardDir, 'proguard-base-rules.pro')
+    if useProguard
+      rm_rf proguardTempJarDir if File.exists? proguardTempJarDir
+      mkdir_p proguardTempJarDir
+      mkdir_p proguardPreBuild
+      mkdir_p proguardPostBuild
+
+      if !proguardUserRules.nil?
+        rules = [File.join(proguardDir, 'proguard-base-rules.pro')]
+        rules << File.join($app_path, proguardUserRules)
+        f = File.open(File.join(proguardDir, 'proguard-generated-rules.pro'), "w")
+        rules.each do |f_name|
+          f_in = File.open(f_name, "r")
+          f_in.each {|f_str| f.puts(f_str)}
+          f.puts("\n\r")
+          f_in.close
+        end
+        f.close
+        proguardRules = File.join(proguardDir, 'proguard-generated-rules.pro')
+      end
+
+    end
+
+    jarNamesCounter = 0
     alljars.each { |jar|
       basename = File.basename(jar);
-      if !unique_jars.member?(basename)
-        args << jar
+      #FIXME: UGLYHACK FROM ALEX. Needs to add dependency filter to maven extractor
+      isFromMaven = (basename == 'classes.jar')# && Pathname.new(jar).split.include?('.m2')
+      if (!unique_jars.member?(basename)) || isFromMaven
+        if !useProguard
+          args << jar
+        else
+          jarNamesCounter += 1
+          cp jar, File.join(proguardPreBuild, jarNamesCounter.to_s + '.jar')
+        end
         unique_jars.add(basename)
       end
     }
 
+    if useProguard
+      progArgs = [];
+      progArgs << '-jar'
+      progArgs << File.join(proguardDir, 'proguard.jar')
+      progArgs << '@' + proguardRules
+      Jake.run(File.join($java, 'java'+$exe_ext), progArgs)
+      args << File.join(proguardPostBuild, "classes-processed.jar")
+    end
 
     Jake.run(File.join($java, 'java'+$exe_ext), args)
+
     unless $?.success?
       raise "Error running DX utility"
     end
@@ -2320,26 +2401,18 @@ namespace "device" do
       print_timestamp('device:android:debug START')
       dexfile = $bindir + "/classes.dex"
       simple_apkfile = $targetdir + "/" + $appname + "-tmp.apk"
+      signed_apkfile = $targetdir + "/" + $appname + "-tmp_signed.apk"
       final_apkfile = $targetdir + "/" + $appname + "-debug.apk"
       resourcepkg = $bindir + "/rhodes.ap_"
 
       apk_build $androidsdkpath, simple_apkfile, resourcepkg, dexfile, true
 
-      puts "Align Debug APK file"
-      args = []
-      args << "-f"
-      args << "-v"
-      args << "4"
-      args << simple_apkfile
-      args << final_apkfile
-      out = Jake.run2($zipalign, args, :hide_output => true)
-      puts out if USE_TRACES
-      unless $?.success?
-        puts "Error running zipalign"
-        exit 1
-      end
+      AndroidTools.signApkDebug( simple_apkfile, signed_apkfile )
+      AndroidTools.alignApk( signed_apkfile, final_apkfile )
+
       #remove temporary files
       rm_rf simple_apkfile
+      rm_rf signed_apkfile
 
       File.open(File.join(File.dirname(final_apkfile), "app_info.txt"), "w") do |f|
         f.puts $app_package_name
@@ -2370,63 +2443,13 @@ namespace "device" do
       apk_build $androidsdkpath, simple_apkfile, resourcepkg, dexfile, false
 
       if not File.exists? $keystore
-        puts "Generating private keystore..."
-        mkdir_p File.dirname($keystore) unless File.directory? File.dirname($keystore)
-
-        args = []
-        args << "-genkey"
-        args << "-alias"
-        args << $storealias
-        args << "-keyalg"
-        args << "RSA"
-        args << "-validity"
-        args << "20000"
-        args << "-keystore"
-        args << $keystore
-        args << "-storepass"
-        args << $storepass
-        args << "-keypass"
-        args << $keypass
-        Jake.run($keytool, args)
-        unless $?.success?
-          puts "Error generating keystore file"
-          exit 1
-        end
+        AndroidTools.generateKeystore( $keystore, $storealias, $storepass, $keypass )        
       end
 
-      puts "Signing APK file"
-      args = []
-      args << "-sigalg"
-      args << "MD5withRSA"
-      args << "-digestalg"
-      args << "SHA1"
-      args << "-verbose"
-      args << "-keystore"
-      args << $keystore
-      args << "-storepass"
-      args << $storepass
-      args << "-signedjar"
-      args << signed_apkfile
-      args << simple_apkfile
-      args << $storealias
-      Jake.run($jarsigner, args)
-      unless $?.success?
-        puts "Error running jarsigner"
-        exit 1
-      end
 
-      puts "Align APK file"
-      args = []
-      args << "-f"
-      args << "-v"
-      args << "4"
-      args << '"' + signed_apkfile + '"'
-      args << '"' + final_apkfile + '"'
-      Jake.run($zipalign, args)
-      unless $?.success?
-        puts "Error running zipalign"
-        exit 1
-      end
+      AndroidTools.signApk( simple_apkfile, signed_apkfile, $keystore, $keypass, $storepass, $storealias )
+      AndroidTools.alignApk( signed_apkfile, final_apkfile )
+
       #remove temporary files
       rm_rf simple_apkfile
       rm_rf signed_apkfile

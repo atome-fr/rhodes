@@ -164,6 +164,11 @@ module Rhogen
       file.destination = "#{name}/app/loading-736h@3x.png"
     end
 
+    file :loadingpng53 do |file|
+      file.source = 'app/loading-812h@3x.png'
+      file.destination = "#{name}/app/loading-812h@3x.png"
+    end
+
     file :loadingpngl do |file|
       file.source = 'app/loading-Landscape.png'
       file.destination = "#{name}/app/loading-Landscape.png"
@@ -803,6 +808,9 @@ module Rhogen
       xcode_version = get_xcode_version
 	  if xcode_version[0].to_i >= 7
         template.source = 'Bremen7.xcodeproj/project.pbxproj'
+      end
+      if xcode_version[0].to_i >= 8
+        template.source = 'Bremen8.xcodeproj/project.pbxproj'
       end
       template.destination = "project/iphone/#{namecamelcase}.xcodeproj/project.pbxproj"
       if File.exists?(template.destination)
