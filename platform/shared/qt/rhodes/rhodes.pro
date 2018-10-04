@@ -74,13 +74,14 @@ win32 {
   RCC_DIR =  ../../../win32/bin/RhoSimulator/resources
   RC_FILE = resources/simulator.rc
   HEADERS += ../../../wm/rhodes/rho/net/NetRequestImpl.h\
-../../../wm/rhodes/stdafx.h
+    ../../../wm/rhodes/stdafx.h\
+    newVersion/AppRunningFlag.h
   SOURCES += ../../../wm/rhodes/rho/net/NetRequestImpl.cpp\
-../../../wm/rhodes/rho/rubyext/SystemImpl.cpp\
-../../../wm/rhodes/rho/common/ExtManager.cpp
+    ../../../wm/rhodes/rho/rubyext/SystemImpl.cpp\
+    ../../../wm/rhodes/rho/common/ExtManager.cpp
   RESOURCES += resources/simulator.qrc
   INCLUDEPATH += ../../../wm/rhodes\
-../../wtl80/include
+    ../../wtl80/include
   DEFINES -= _UNICODE
   DEFINES += WIN32 _WINDOWS UNICODE QT_LARGEFILE_SUPPORT QT_CORE_LIB QT_GUI_LIB QT_NETWORK_LIB QT_WEBKIT_LIB _CRT_SECURE_NO_WARNINGS _CRT_NON_CONFORMING_SWPRINTFS WIN32_LEAN_AND_MEAN
 
@@ -139,8 +140,12 @@ DEFINES += RHODES_QT_PLATFORM
 win32 {
   QMAKE_CFLAGS_WARN_ON += /wd4996 /wd4100 /wd4005
   QMAKE_CXXFLAGS_WARN_ON += /wd4996 /wd4100 /wd4005
-  QMAKE_CFLAGS_RELEASE += /O2
-  QMAKE_CXXFLAGS_RELEASE += /O2
+    QMAKE_CXXFLAGS_RELEASE += /MP9 /O2
+    QMAKE_CXXFLAGS_DEBUG += /MP9 /O2
+
+    QMAKE_CFLAGS_RELEASE += /O2 /MD
+    QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO += /O2
+    QMAKE_CFLAGS_DEBUG += /Zi /MDd
 }
 
 HEADERS += impl/RhoClassFactoryImpl.h\
@@ -158,7 +163,8 @@ QtLogView.h \
 QtCustomStyle.h\
 mainwindowinterface.h \
 guithreadfunchelper.h \
-    impl/notificationsound.h
+impl/notificationsound.h
+
 
 
 SOURCES += impl/AlertImpl.cpp\
